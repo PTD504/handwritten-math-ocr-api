@@ -7,6 +7,8 @@ class Config:
     val_img_dir = os.path.join(data_root, 'validate_formulas')
     train_label_path = os.path.join(data_root, 'train_labels.csv')
     val_label_path = os.path.join(data_root, 'validate_labels.csv')
+    test_img_dir = os.path.join(data_root, 'test_formulas')
+    test_label_path = os.path.join(data_root, 'test_labels.csv')
     
     checkpoint_dir = 'checkpoints/'
     os.makedirs(checkpoint_dir, exist_ok=True)

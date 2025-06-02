@@ -83,3 +83,19 @@ def get_data_loaders(vocab):
     )
     
     return train_loader, val_loader
+
+def get_test_loader(vocab):
+    test_dataset = MathFormulaDataset(
+        img_dir=config.test_img_dir,
+        label_path=config.test_label_path,
+        vocab=vocab
+    )
+    
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=config.batch_size,
+        shuffle=False,
+        num_workers=config.num_workers,
+        pin_memory=True
+    )
+    return test_loader
