@@ -25,9 +25,10 @@ class MathFormulaDataset(Dataset):
         label = self.df.iloc[idx, 1]
         
         img_path = os.path.join(self.img_dir, img_name)
-        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        
-        if img is None:
+        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        if img is not None:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        else:
             raise FileNotFoundError(f"Image not found: {img_path}")
         
         # Resize với padding
@@ -59,7 +60,8 @@ def create_vocab(label_paths):
 def get_data_loaders(vocab):
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5]),
+        # transforms.Normalize(mean=[0.5], std=[0.5]),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         transforms.RandomAffine(degrees=2, shear=2, scale=(0.95, 1.05))  # Data augmentation
     ])
     

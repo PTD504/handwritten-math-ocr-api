@@ -1,0 +1,18 @@
+# Python generated files
+__pycache__/
+*.pyc
+*.pyd
+
+# Distribution / packaging
+dist/
+build/
+eggs/
+*.egg-info/
+
+# Virtual environment
+.venv
+venv
+env
+
+# Checkpoints
+checkpoints/

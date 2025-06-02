@@ -2,7 +2,7 @@ import os
 
 class Config:
     # Path settings
-    data_root = 'data/'
+    data_root = os.path.join(os.path.dirname(os.getcwd()), 'data')
     train_img_dir = os.path.join(data_root, 'train_formulas')
     val_img_dir = os.path.join(data_root, 'validate_formulas')
     train_label_path = os.path.join(data_root, 'train_labels.csv')
@@ -10,7 +10,7 @@ class Config:
     test_img_dir = os.path.join(data_root, 'test_formulas')
     test_label_path = os.path.join(data_root, 'test_labels.csv')
     
-    checkpoint_dir = 'checkpoints/'
+    checkpoint_dir = os.path.join(os.path.dirname(os.getcwd()), 'checkpoints')
     os.makedirs(checkpoint_dir, exist_ok=True)
     
     # Model parameters
