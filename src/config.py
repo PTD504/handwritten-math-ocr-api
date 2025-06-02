@@ -37,6 +37,6 @@ class Config:
     special_tokens = [pad_token, sos_token, eos_token, unk_token]
     
     # Inference
-    beam_size = 3
+    beam_size = 5
 
 config = Config()
