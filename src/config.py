@@ -1,0 +1,40 @@
+import os
+
+class Config:
+    # Path settings
+    data_root = 'data/'
+    train_img_dir = os.path.join(data_root, 'train_formulas')
+    val_img_dir = os.path.join(data_root, 'validate_formulas')
+    train_label_path = os.path.join(data_root, 'train_labels.csv')
+    val_label_path = os.path.join(data_root, 'validate_labels.csv')
+    
+    checkpoint_dir = 'checkpoints/'
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    # Model parameters
+    img_h = 89
+    img_w = 290
+    d_model = 256
+    nhead = 8
+    num_decoder_layers = 3
+    dim_feedforward = 512
+    dropout = 0.1
+    
+    # Training parameters
+    batch_size = 64
+    num_workers = 0  
+    learning_rate = 3e-4
+    epochs = 30
+    max_seq_len = 150
+    
+    # Vocabulary settings
+    sos_token = '<sos>'
+    eos_token = '<eos>'
+    pad_token = '<pad>'
+    unk_token = '<unk>'
+    special_tokens = [pad_token, sos_token, eos_token, unk_token]
+    
+    # Inference
+    beam_size = 3
+
+config = Config()
