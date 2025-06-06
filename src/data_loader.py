@@ -3,6 +3,7 @@ import cv2
 import torch
 import pandas as pd
 import numpy as np
+import re
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from config import config
@@ -43,14 +44,23 @@ class MathFormulaDataset(Dataset):
             
         return img, torch.tensor(padded_ids), len(token_ids)
 
+def tokenize_latex(formula: str):
+    # Tách theo các đơn vị LaTeX (command, symbols, letters, etc.)
+    token_pattern = r'(\\[a-zA-Z]+|[{}_^$%&#]|[0-9]+|[a-zA-Z]+|[^\s])'
+    tokens = re.findall(token_pattern, formula)
+    return tokens
+
 def create_vocab(label_paths):
-    all_chars = set()
+    all_tokens = set()
+
     for path in label_paths:
         df = pd.read_csv(path)
-        for formula in df.iloc[:, 1]:
-            all_chars.update(formula.split())
-    
-    vocab = {token: idx for idx, token in enumerate(config.special_tokens + sorted(all_chars))}
+        for formula in df['latex_label'].dropna():
+            formula = formula.strip()
+            tokens = tokenize_latex(formula)
+            all_tokens.update(tokens)
+
+    vocab = {token: idx for idx, token in enumerate(config.special_tokens + sorted(all_tokens))}
     return vocab
 
 def get_data_loaders(vocab):
