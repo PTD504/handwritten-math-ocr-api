@@ -1,8 +1,8 @@
 import torch
 from tqdm import tqdm
 from data_loader import create_vocab, get_data_loaders
-from train import train_model
-from utils import create_vocab_dicts
+from train import train_model, load_and_continue_training
+from utils import load_vocab
 from inference import predict
 from config import config
 import pandas as pd
@@ -12,13 +12,16 @@ def main():
     print(f"Using device: {device}")
     
     # Create vocab
-    vocab, idx2char = create_vocab_dicts()
+    vocab, idx2char = load_vocab()
     
     # Create data loader
     train_loader, val_loader = get_data_loaders(vocab)
     
     # Train model
     model = train_model(train_loader, val_loader, vocab, device)
+
+    # Or train model from a checkpoint
+    # model = load_and_continue_training(train_loader, val_loader, vocab, device)
     
     # Inference
     test_image = next(iter(val_loader))[0][0]
@@ -26,6 +29,5 @@ def main():
     print(f"Prediction: {prediction}")
 
 if __name__ == "__main__":
-    # Set multiprocessing start method for Windows compatibility
     torch.multiprocessing.set_start_method('spawn', force=True)
     main()

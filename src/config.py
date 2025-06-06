@@ -20,7 +20,7 @@ class Config:
     nhead = 8
     num_decoder_layers = 3
     dim_feedforward = 512
-    dropout = 0.1
+    dropout = 0.2
     
     # Training parameters
     batch_size = 64

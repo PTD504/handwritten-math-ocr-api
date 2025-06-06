@@ -1,5 +1,6 @@
 import os
 import cv2
+from PIL import Image
 import torch
 import pandas as pd
 import numpy as np
@@ -30,6 +31,7 @@ class MathFormulaDataset(Dataset):
         
         # Resize với padding
         img = cv2.resize(img, (config.img_w, config.img_h))
+        img = Image.fromarray(img, mode='L')
         img = self.transform(img)
         
         # Chuyển label thành token IDs
@@ -65,10 +67,9 @@ def create_vocab(label_paths):
 
 def get_data_loaders(vocab):
     transform = transforms.Compose([
+        transforms.RandomAffine(degrees=2, shear=2, scale=(0.95, 1.05)), 
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5]),
-        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        transforms.RandomAffine(degrees=2, shear=2, scale=(0.95, 1.05))  # Data augmentation
+        transforms.Normalize(mean=[0.5], std=[0.5])
     ])
     
     train_dataset = MathFormulaDataset(config.train_img_dir, config.train_label_path, vocab, transform)
@@ -109,4 +110,5 @@ def get_test_loader(vocab):
         persistent_workers=True,
         pin_memory=True
     )
+
     return test_loader

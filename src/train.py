@@ -13,7 +13,7 @@ def train_model(train_loader, val_loader, vocab, device):
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
     scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 
     best_val_loss = float('inf')
 
@@ -76,7 +76,7 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
     scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
     
     # Load checkpoint
     start_epoch, best_val_loss = load_checkpoint(model, optimizer, scaler, scheduler, checkpoint_filename)
