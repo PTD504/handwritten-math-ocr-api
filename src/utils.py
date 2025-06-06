@@ -10,7 +10,7 @@ def save_checkpoint(epoch, model, optimizer, scaler, scheduler, loss, filename):
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'scaler_state_dict': scaler.state_dict(),  # Lưu trạng thái GradScaler
+        'scaler_state_dict': scaler.state_dict(),  
         'scheduler_state_dict': scheduler.state_dict(),
         'loss': loss,
     }
@@ -21,13 +21,13 @@ def load_checkpoint(model, optimizer, scaler, scheduler, filename):
     checkpoint = torch.load(os.path.join(config.checkpoint_dir, filename))
     model.load_state_dict(checkpoint['model_state_dict'])
     
-    if optimizer:
+    if 'optimizer_state_dict' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     
-    if scaler:
+    if 'scaler_state_dict' in checkpoint:
         scaler.load_state_dict(checkpoint['scaler_state_dict'])
 
-    if scheduler:
+    if 'scheduler_state_dict' in checkpoint:
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
     
     return checkpoint['epoch'], checkpoint['loss']
