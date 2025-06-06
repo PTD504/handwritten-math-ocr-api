@@ -2,24 +2,34 @@ import os
 import torch
 from config import config
 import torch.nn as nn
+import json
 from data_loader import create_vocab
 
-def save_checkpoint(epoch, model, optimizer, scaler, loss, filename):
+def save_checkpoint(epoch, model, optimizer, scaler, scheduler, loss, filename):
     state = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'scaler_state_dict': scaler.state_dict(),  # Lưu trạng thái GradScaler
+        'scheduler_state_dict': scheduler.state_dict(),
         'loss': loss,
     }
     torch.save(state, os.path.join(config.checkpoint_dir, filename))
 
 
-def load_checkpoint(model, optimizer, filename):
+def load_checkpoint(model, optimizer, scaler, scheduler, filename):
     checkpoint = torch.load(os.path.join(config.checkpoint_dir, filename))
     model.load_state_dict(checkpoint['model_state_dict'])
+    
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    
+    if scaler:
+        scaler.load_state_dict(checkpoint['scaler_state_dict'])
+
+    if scheduler:
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    
     return checkpoint['epoch'], checkpoint['loss']
 
 def init_weights(m):
@@ -40,3 +50,15 @@ def create_vocab_dicts():
     vocab = create_vocab([config.train_label_path])
     idx2char = {idx: char for char, idx in vocab.items()}
     return vocab, idx2char
+
+def save_vocab(vocab, filepath):
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(vocab, f, ensure_ascii=False, indent=4)
+
+def load_vocab(filepath):
+    with open(filepath, 'r', encoding='utf-8') as f:
+        vocab = json.load(f)
+    return vocab
+
+def get_vocab_size(vocab):
+    return len(vocab)

@@ -5,15 +5,17 @@ from tqdm import tqdm
 from model import FormulaRecognitionModel
 from utils import save_checkpoint, load_checkpoint
 from config import config
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 
 def train_model(train_loader, val_loader, vocab, device):
     model = FormulaRecognitionModel(len(vocab)).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
-    
-    best_val_loss = float('inf')
+    scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
 
-    scaler = torch.cuda.amp.GradScaler()  # Mixed precision training
+    best_val_loss = float('inf')
 
     for epoch in range(config.epochs):
         # Training
@@ -53,6 +55,12 @@ def train_model(train_loader, val_loader, vocab, device):
         val_loss /= len(val_loader)
         
         print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+
+        # Step the scheduler
+        scheduler.step(val_loss)
+
+        for param_group in optimizer.param_groups:
+            print(f"Learning Rate after epoch {epoch+1}: {param_group['lr']:.6f}")
         
         # Save checkpoint
         save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
@@ -63,16 +71,17 @@ def train_model(train_loader, val_loader, vocab, device):
     
     return model
 
-def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoint_path):
+def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoint_filename="best_model.pth"):
     model = FormulaRecognitionModel(len(vocab)).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
+    scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
     
     # Load checkpoint
-    start_epoch, best_val_loss = load_checkpoint(model, optimizer, checkpoint_path)
+    start_epoch, best_val_loss = load_checkpoint(model, optimizer, scaler, scheduler, checkpoint_filename)
 
-    scaler = torch.cuda.amp.GradScaler()  # Mixed precision training
-    train_loss = 0
+    scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
     
     # Continue training from saved checkpoint
     for epoch in range(start_epoch, config.epochs):
@@ -113,6 +122,12 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
         val_loss /= len(val_loader)
         
         print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+
+        # Step the scheduler
+        scheduler.step(val_loss)
+
+        for param_group in optimizer.param_groups:
+            print(f"Learning Rate after epoch {epoch+1}: {param_group['lr']:.6f}")
         
         # Save checkpoint
         save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
