@@ -24,7 +24,8 @@ class Config:
     
     # Training parameters
     batch_size = 64
-    num_workers = 0  
+
+    num_workers = 4
     learning_rate = 3e-4
     epochs = 30
     max_seq_len = 150

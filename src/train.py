@@ -12,22 +12,28 @@ def train_model(train_loader, val_loader, vocab, device):
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
     
     best_val_loss = float('inf')
-    
+
+    scaler = torch.cuda.amp.GradScaler()  # Mixed precision training
+
     for epoch in range(config.epochs):
         # Training
         model.train()
         train_loss = 0
         for images, captions, _ in tqdm(train_loader, desc=f"Epoch {epoch+1}"):
-            images = images.to(device)
-            captions = captions.to(device)
+            images = images.to(device, non_blocking=True)
+            captions = captions.to(device, non_blocking=True)
+
+            # Mixed precision training
+            with torch.amp.autocast('cuda'):
+                outputs = model(images, captions)
+                loss = criterion(outputs.view(-1, len(vocab)), captions[:, 1:].contiguous().view(-1))
             
-            outputs = model(images, captions)
-            loss = criterion(outputs.view(-1, len(vocab)), captions[:, 1:].contiguous().view(-1))
-            
-            optimizer.zero_grad()
-            loss.backward()
+            optimizer.zero_grad(set_to_none=True)  # Set gradients to None for efficiency
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             
             train_loss += loss.item()
         
@@ -36,8 +42,8 @@ def train_model(train_loader, val_loader, vocab, device):
         model.eval()
         with torch.no_grad():
             for images, captions, _ in val_loader:
-                images = images.to(device)
-                captions = captions.to(device)
+                images = images.to(device, non_blocking=True)
+                captions = captions.to(device, non_blocking=True)   
                 
                 outputs = model(images, captions)
                 loss = criterion(outputs.view(-1, len(vocab)), captions[:, 1:].contiguous().view(-1))
@@ -49,11 +55,11 @@ def train_model(train_loader, val_loader, vocab, device):
         print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
         
         # Save checkpoint
-        save_checkpoint(epoch+1, model, optimizer, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
+        save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
         
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_checkpoint(epoch+1, model, optimizer, val_loss, "best_model.pth")
+            save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, "best_model.pth")
     
     return model
 
@@ -64,6 +70,9 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
     
     # Load checkpoint
     start_epoch, best_val_loss = load_checkpoint(model, optimizer, checkpoint_path)
+
+    scaler = torch.cuda.amp.GradScaler()  # Mixed precision training
+    train_loss = 0
     
     # Continue training from saved checkpoint
     for epoch in range(start_epoch, config.epochs):
@@ -71,16 +80,20 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
         model.train()
         train_loss = 0
         for images, captions, _ in tqdm(train_loader, desc=f"Epoch {epoch+1}"):
-            images = images.to(device)
-            captions = captions.to(device)
+            images = images.to(device, non_blocking=True)
+            captions = captions.to(device, non_blocking=True)
+
+            # Mixed precision training
+            with torch.amp.autocast('cuda'):
+                outputs = model(images, captions)
+                loss = criterion(outputs.view(-1, len(vocab)), captions[:, 1:].contiguous().view(-1))
             
-            outputs = model(images, captions)
-            loss = criterion(outputs.view(-1, len(vocab)), captions[:, 1:].contiguous().view(-1))
-            
-            optimizer.zero_grad()
-            loss.backward()
+            optimizer.zero_grad(set_to_none=True)  # Set gradients to None for efficiency
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             
             train_loss += loss.item()
         
@@ -89,8 +102,8 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
         model.eval()
         with torch.no_grad():
             for images, captions, _ in val_loader:
-                images = images.to(device)
-                captions = captions.to(device)
+                images = images.to(device, non_blocking=True)
+                captions = captions.to(device, non_blocking=True)
                 
                 outputs = model(images, captions)
                 loss = criterion(outputs.view(-1, len(vocab)), captions[:, 1:].contiguous().view(-1))
@@ -102,11 +115,11 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
         print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
         
         # Save checkpoint
-        save_checkpoint(epoch+1, model, optimizer, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
+        save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
         
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_checkpoint(epoch+1, model, optimizer, val_loss, "best_model.pth")
+            save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, "best_model.pth")
     
     return model
     

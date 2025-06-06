@@ -4,14 +4,16 @@ from config import config
 import torch.nn as nn
 from data_loader import create_vocab
 
-def save_checkpoint(epoch, model, optimizer, loss, filename):
+def save_checkpoint(epoch, model, optimizer, scaler, loss, filename):
     state = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
+        'scaler_state_dict': scaler.state_dict(),  # Lưu trạng thái GradScaler
         'loss': loss,
     }
     torch.save(state, os.path.join(config.checkpoint_dir, filename))
+
 
 def load_checkpoint(model, optimizer, filename):
     checkpoint = torch.load(os.path.join(config.checkpoint_dir, filename))

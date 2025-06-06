@@ -25,11 +25,7 @@ class MathFormulaDataset(Dataset):
         label = self.df.iloc[idx, 1]
         
         img_path = os.path.join(self.img_dir, img_name)
-        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
-        if img is not None:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        else:
-            raise FileNotFoundError(f"Image not found: {img_path}")
+        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
         
         # Resize với padding
         img = cv2.resize(img, (config.img_w, config.img_h))
@@ -60,8 +56,8 @@ def create_vocab(label_paths):
 def get_data_loaders(vocab):
     transform = transforms.Compose([
         transforms.ToTensor(),
-        # transforms.Normalize(mean=[0.5], std=[0.5]),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.Normalize(mean=[0.5], std=[0.5]),
+        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         transforms.RandomAffine(degrees=2, shear=2, scale=(0.95, 1.05))  # Data augmentation
     ])
     
@@ -72,7 +68,8 @@ def get_data_loaders(vocab):
         train_dataset,
         batch_size=config.batch_size,
         shuffle=True,
-        num_workers=config.num_workers,
+        num_workers=config.num_workers if torch.cuda.is_available() else 0,
+        persistent_workers=True,
         pin_memory=True
     )
     
@@ -80,7 +77,8 @@ def get_data_loaders(vocab):
         val_dataset,
         batch_size=config.batch_size,
         shuffle=False,
-        num_workers=config.num_workers,
+        num_workers=config.num_workers if torch.cuda.is_available() else 0,
+        persistent_workers=True,
         pin_memory=True
     )
     
@@ -97,7 +95,8 @@ def get_test_loader(vocab):
         test_dataset,
         batch_size=config.batch_size,
         shuffle=False,
-        num_workers=config.num_workers,
+        num_workers=config.num_workers if torch.cuda.is_available() else 0,
+        persistent_workers=True,
         pin_memory=True
     )
     return test_loader

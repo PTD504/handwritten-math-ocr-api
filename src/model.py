@@ -7,19 +7,45 @@ from config import config
 class EncoderCNN(nn.Module):
     def __init__(self):
         super().__init__()
+        # Load ResNet18 với pretrained weights
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        
+        # Điều chỉnh layer đầu vào cho ảnh grayscale
+        original_first_conv = resnet.conv1
+        resnet.conv1 = nn.Conv2d(
+            in_channels=1,  # 1 kênh thay vì 3
+            out_channels=original_first_conv.out_channels,
+            kernel_size=original_first_conv.kernel_size,
+            stride=original_first_conv.stride,
+            padding=original_first_conv.padding,
+            bias=original_first_conv.bias
+        )
+        
+        # Copy weights từ kênh R của pretrained model
+        with torch.no_grad():
+            resnet.conv1.weight[:, 0:1, :, :].copy_(original_first_conv.weight[:, 0:1, :, :])
+        
+        # Chỉ lấy các layers feature extraction
         self.features = nn.Sequential(*list(resnet.children())[:-2])
         
-        # Adaptive pooling to get variable sequence length
+        # Adaptive pooling để xử lý kích thước ảnh khác nhau
         self.adaptive_pool = nn.AdaptiveAvgPool2d((1, None))
+        
+        # Projection layer để giảm chiều
         self.projection = nn.Linear(512, config.d_model)
 
     def forward(self, x):
-        x = self.features(x)
-        x = self.adaptive_pool(x)
-        x = x.permute(0, 2, 3, 1)
-        x = self.projection(x)
-        return x.squeeze(2).permute(0, 2, 1)  # (batch, seq_len, d_model)
+        # Forward qua ResNet
+        x = self.features(x)  # [batch, 512, h', w']
+        
+        # Adaptive pooling
+        x = self.adaptive_pool(x)  # [batch, 512, 1, w'']
+        
+        # Projection và điều chỉnh kích thước
+        x = x.permute(0, 3, 2, 1)  # [batch, w'', 1, 512]
+        x = self.projection(x)      # [batch, w'', 1, d_model]
+        
+        return x.squeeze(2)  # [batch, w'', d_model]
 
 class DecoderTransformer(nn.Module):
     def __init__(self, vocab_size):
@@ -28,12 +54,15 @@ class DecoderTransformer(nn.Module):
         self.pos_encoder = nn.Embedding(config.max_seq_len, config.d_model)
         
         decoder_layer = TransformerDecoderLayer(
-            config.d_model, config.nhead, config.dim_feedforward, config.dropout
+            config.d_model, 
+            config.nhead, 
+            config.dim_feedforward, 
+            config.dropout
         )
         self.transformer_decoder = TransformerDecoder(decoder_layer, config.num_decoder_layers)
         self.fc_out = nn.Linear(config.d_model, vocab_size)
         
-        # Mask for the target sequence
+        # Tạo mask cho sequence
         self.register_buffer("tgt_mask", self.generate_square_subsequent_mask(config.max_seq_len))
 
     def generate_square_subsequent_mask(self, sz):
@@ -63,6 +92,6 @@ class FormulaRecognitionModel(nn.Module):
         self.decoder = DecoderTransformer(vocab_size)
 
     def forward(self, images, captions):
-        features = self.encoder(images)
-        outputs = self.decoder(features, captions[:, :-1])
+        features = self.encoder(images)  # [batch, seq_len, d_model]
+        outputs = self.decoder(features, captions[:, :-1])  # Bỏ token cuối
         return outputs
