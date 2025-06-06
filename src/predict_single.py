@@ -82,7 +82,7 @@ def main():
     
     # Setup argument parser
     parser = argparse.ArgumentParser(description='Predict math formula from handwritten image')
-    parser.add_argument('image_path', type=str, default=r"E:\SchoolWork\CS338\final-project\collect-data\HandwrittenMathematicalExpression\HandwrittenMathematicalExpression\1.png", help='Path to input image')
+    parser.add_argument('image_path', type=str, help='Path to input image')
     parser.add_argument('--device', type=str, default='cuda', help='Device to use (cuda/cpu)')
     args = parser.parse_args()
     
