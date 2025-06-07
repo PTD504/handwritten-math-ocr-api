@@ -18,7 +18,7 @@ class Config:
     img_w = 290
     d_model = 256
     nhead = 8
-    num_decoder_layers = 3
+    num_decoder_layers = 6
     dim_feedforward = 512
     dropout = 0.2
     
