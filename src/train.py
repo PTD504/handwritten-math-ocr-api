@@ -63,11 +63,11 @@ def train_model(train_loader, val_loader, vocab, device):
             print(f"Learning Rate after epoch {epoch+1}: {param_group['lr']:.6f}")
         
         # Save checkpoint
-        save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
+        save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
         
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, "best_model.pth")
+            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, "best_model.pth")
     
     return model
 
@@ -130,11 +130,11 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
             print(f"Learning Rate after epoch {epoch+1}: {param_group['lr']:.6f}")
         
         # Save checkpoint
-        save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
+        save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
         
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_checkpoint(epoch+1, model, optimizer, scaler, val_loss, "best_model.pth")
+            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, "best_model.pth")
     
     return model
     
