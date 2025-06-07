@@ -1,4 +1,4 @@
-torch==2.7.0+cu118
+torch==2.7.0
 torchvision==0.22.0
 pandas==2.2.3
 opencv-python==4.8.0.76
