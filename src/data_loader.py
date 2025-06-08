@@ -36,15 +36,17 @@ class MathFormulaDataset(Dataset):
         
         # Chuyển label thành token IDs
         token_ids = [self.vocab[config.sos_token]]
-        token_ids += [self.vocab.get(char, self.vocab[config.unk_token]) for char in label.split()]
+        tokens = tokenize_latex(label)
+        token_ids += [self.vocab.get(token, self.vocab[config.unk_token]) for token in tokens]
         token_ids.append(self.vocab[config.eos_token])
         
         # Padding sequence
+        length = len(token_ids)  # trước khi padding
         padded_ids = token_ids[:config.max_seq_len]
         if len(padded_ids) < config.max_seq_len:
             padded_ids += [self.vocab[config.pad_token]] * (config.max_seq_len - len(padded_ids))
-            
-        return img, torch.tensor(padded_ids), len(token_ids)
+
+        return img, torch.tensor(padded_ids), length
 
 def tokenize_latex(formula: str):
     # Tách theo các đơn vị LaTeX (command, symbols, letters, etc.)

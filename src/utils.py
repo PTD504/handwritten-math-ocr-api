@@ -62,7 +62,9 @@ def save_vocab(vocab, filename='vocab.json'):
 def load_vocab(filename='vocab.json'):
     with open(os.path.join(config.checkpoint_dir, filename), 'r', encoding='utf-8') as f:
         data = json.load(f)
-    return data['vocab'], data['idx2char']
+    vocab = data['vocab']
+    idx2char = {int(k): v for k, v in data['idx2char'].items()}
+    return vocab, idx2char
 
 def get_vocab_size(vocab):
     return len(vocab)
