@@ -8,14 +8,16 @@ from config import config
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
-def train_model(train_loader, val_loader, vocab, device):
+def train_model(train_loader, val_loader, vocab, device, patience=5):
     model = FormulaRecognitionModel(len(vocab)).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
     scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
+    scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
 
-    best_val_loss = float('inf')
+    best_val_accuracy = 0.0
+    best_epoch = 0
+    no_improvement_epochs = 0  # Counter for early stopping
 
     for epoch in range(config.epochs):
         # Training
@@ -38,9 +40,10 @@ def train_model(train_loader, val_loader, vocab, device):
             scaler.update()
             
             train_loss += loss.item()
-        
+
         # Validation
         val_loss = 0
+        val_accuracy = 0
         model.eval()
         with torch.no_grad():
             for images, captions, _ in val_loader:
@@ -50,39 +53,56 @@ def train_model(train_loader, val_loader, vocab, device):
                 outputs = model(images, captions)
                 loss = criterion(outputs.view(-1, len(vocab)), captions[:, 1:].contiguous().view(-1))
                 val_loss += loss.item()
-        
+
+                # Calculate validation accuracy
+                pred = outputs.argmax(dim=-1)
+                correct = (pred == captions[:, 1:]).sum().item()
+                total = captions[:, 1:].numel()
+                val_accuracy += correct / total
+
         train_loss /= len(train_loader)
         val_loss /= len(val_loader)
-        
-        print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+        val_accuracy /= len(val_loader)  # Average over batches
+
+        print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Accuracy: {val_accuracy:.4f}")
 
         # Step the scheduler
-        scheduler.step(val_loss)
+        scheduler.step(val_accuracy)
 
         for param_group in optimizer.param_groups:
             print(f"Learning Rate after epoch {epoch+1}: {param_group['lr']:.6f}")
         
-        # Save checkpoint
-        save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
+        # Save checkpoint with val_accuracy
+        save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, f"checkpoint_epoch_{epoch+1}.pth")
         
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, "best_model.pth")
+        # Check for best model based on val_accuracy
+        if val_accuracy > best_val_accuracy:
+            best_val_accuracy = val_accuracy
+            best_epoch = epoch + 1
+            no_improvement_epochs = 0  # Reset counter
+            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, "best_model.pth")
+        else:
+            no_improvement_epochs += 1
+
+        # Early Stopping: Stop training if no improvement in `patience` epochs
+        if no_improvement_epochs >= patience:
+            print(f"Early stopping triggered at epoch {epoch+1}. No improvement for {patience} epochs.")
+            break
     
     return model
 
-def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoint_filename="best_model.pth"):
+def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoint_filename="best_model.pth", patience=5):
     model = FormulaRecognitionModel(len(vocab)).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
     scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
+    scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
     
     # Load checkpoint
-    start_epoch, best_val_loss = load_checkpoint(model, optimizer, scaler, scheduler, checkpoint_filename)
+    start_epoch, best_val_accuracy = load_checkpoint(model, optimizer, scaler, scheduler, checkpoint_filename)
+    best_epoch = start_epoch
+    no_improvement_epochs = 0  # Counter for early stopping
 
-    scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
-    
     # Continue training from saved checkpoint
     for epoch in range(start_epoch, config.epochs):
         # Training
@@ -108,6 +128,7 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
         
         # Validation
         val_loss = 0
+        val_accuracy = 0
         model.eval()
         with torch.no_grad():
             for images, captions, _ in val_loader:
@@ -117,24 +138,41 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
                 outputs = model(images, captions)
                 loss = criterion(outputs.view(-1, len(vocab)), captions[:, 1:].contiguous().view(-1))
                 val_loss += loss.item()
+
+                # Calculate validation accuracy
+                pred = outputs.argmax(dim=-1)
+                correct = (pred == captions[:, 1:]).sum().item()
+                total = captions[:, 1:].numel()
+                val_accuracy += correct / total
         
         train_loss /= len(train_loader)
         val_loss /= len(val_loader)
-        
-        print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+        val_accuracy /= len(val_loader)  # Average over batches
+
+        print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Accuracy: {val_accuracy:.4f}")
 
         # Step the scheduler
-        scheduler.step(val_loss)
+        scheduler.step(val_accuracy)
 
         for param_group in optimizer.param_groups:
             print(f"Learning Rate after epoch {epoch+1}: {param_group['lr']:.6f}")
         
-        # Save checkpoint
-        save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, f"checkpoint_epoch_{epoch+1}.pth")
+        # Save checkpoint with val_accuracy
+        save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, f"checkpoint_epoch_{epoch+1}.pth")
         
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, "best_model.pth")
+        # Check for best model based on val_accuracy
+        if val_accuracy > best_val_accuracy:
+            best_val_accuracy = val_accuracy
+            best_epoch = epoch + 1
+            no_improvement_epochs = 0  # Reset counter
+            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, "best_model.pth")
+        else:
+            no_improvement_epochs += 1
+
+        # Early Stopping: Stop training if no improvement in `patience` epochs
+        if no_improvement_epochs >= patience:
+            print(f"Early stopping triggered at epoch {epoch+1}. No improvement for {patience} epochs.")
+            break
     
     return model
     

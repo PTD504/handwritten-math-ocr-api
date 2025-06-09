@@ -100,8 +100,6 @@ def predict_with_topk(model, image_tensor, vocab, idx2token, device, k=5, max_le
 # === Chạy thử ===
 if __name__ == "__main__":
     image_tensor = preprocess_image(image_test_path)
-    # tokens = predict(image_tensor)
-    # latex_output = ' '.join(tokens)
-    # print("Predicted LaTeX:", latex_output)
-    latex_prediction = predict_with_topk(model, image_tensor, vocab, idx2token, device, k=10)
-print("\nFinal predicted LaTeX:", latex_prediction)
+    tokens = predict(image_tensor)
+    latex_output = ' '.join(tokens)
+    print("Predicted LaTeX:", latex_output)

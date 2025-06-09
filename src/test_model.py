@@ -32,8 +32,10 @@ def load_model(vocab_size, device):
     """Load trained model from checkpoint"""
     model = FormulaRecognitionModel(vocab_size).to(device)
     try:
-        checkpoint_path = Path(config.checkpoint_dir) / "best_model.pth"
-        load_checkpoint(model, None, checkpoint_path)
+        # checkpoint_path = Path(config.checkpoint_dir) / "best_model.pth"
+        checkpoint_path = Path(config.checkpoint_dir) / "checkpoint_epoch_27.pth"
+        # load_checkpoint(model, None, checkpoint_path)
+        load_checkpoint(model, optimizer=None, scaler=None, scheduler=None, filename=checkpoint_path)
         
         if torch.cuda.device_count() > 1:
             logger.info(f"Using {torch.cuda.device_count()} GPUs")
@@ -57,38 +59,33 @@ def calculate_metrics(pred, truth):
     is_correct = pred == truth
     return is_correct, cer
 
-def evaluate_model(model, test_loader, vocab, idx2char, device):
-    """Run model evaluation on test set"""
+def evaluate_model(model, test_loader, vocab, idx2char, device, mode='greedy'):
+    """Evaluate the model on the test set and return results as a DataFrame"""
     model.eval()
     results = []
-    
+
     with torch.no_grad():
-        for batch in tqdm(test_loader, desc="Evaluating"):
-            images, captions, lengths = batch
+        for images, captions, lengths in tqdm(test_loader, desc=f"Evaluating ({mode})"):
             images = images.to(device)
             captions = captions.to(device)
-            
-            batch_results = []
-            for i in range(images.size(0)):
-                try:
-                    pred = predict(images[i], model, vocab, idx2char, device)
-                    gt_tokens = [idx2char[idx.item()] for idx in captions[i][1:lengths[i].item()-1]]
-                    truth = ' '.join(gt_tokens)
-                    
-                    correct, cer = calculate_metrics(pred, truth)
-                    
-                    batch_results.append({
-                        'image_id': test_loader.dataset.df.iloc[i, 0],
-                        'prediction': pred,
-                        'ground_truth': truth,
-                        'is_correct': correct,
-                        'cer': cer
-                    })
-                except Exception as e:
-                    logger.warning(f"Error processing image {i}: {str(e)}")
-            
-            results.extend(batch_results)
-    
+
+            predictions = predict(images, model, vocab, idx2char, device, mode=mode)
+
+            for i in range(len(predictions)):
+                pred = predictions[i]
+                gt_tokens = [idx2char[idx.item()] for idx in captions[i][1:lengths[i].item()-1]]
+                truth = ' '.join(gt_tokens)
+
+                correct, cer = calculate_metrics(pred, truth)
+
+                results.append({
+                    'image_id': test_loader.dataset.df.iloc[i, 0],
+                    'prediction': pred,
+                    'ground_truth': truth,
+                    'is_correct': correct,
+                    'cer': cer
+                })
+
     return pd.DataFrame(results)
 
 def save_results(results_df, output_dir="results"):
@@ -139,5 +136,5 @@ def main():
         raise
 
 if __name__ == "__main__":
-    # torch.multiprocessing.set_start_method('spawn', force=True)
+    torch.multiprocessing.set_start_method('spawn', force=True)
     main()
