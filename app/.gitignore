@@ -1,0 +1,4 @@
+
+# Model files
+trained-model/*
+!trained-model/readme.md
