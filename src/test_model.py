@@ -32,9 +32,7 @@ def load_model(vocab_size, device):
     """Load trained model from checkpoint"""
     model = FormulaRecognitionModel(vocab_size).to(device)
     try:
-        # checkpoint_path = Path(config.checkpoint_dir) / "best_model.pth"
-        checkpoint_path = Path(config.checkpoint_dir) / "checkpoint_epoch_27.pth"
-        # load_checkpoint(model, None, checkpoint_path)
+        checkpoint_path = Path(config.checkpoint_dir) / "best_model.pth"
         load_checkpoint(model, optimizer=None, scaler=None, scheduler=None, filename=checkpoint_path)
         
         if torch.cuda.device_count() > 1:
