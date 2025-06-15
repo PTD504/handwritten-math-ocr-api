@@ -5,11 +5,12 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from nltk.translate.bleu_score import sentence_bleu
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 import numpy as np
 from tqdm import tqdm
 from model import FormulaRecognitionModel
 from config import config
+from utils import save_checkpoint
 
 def train_model(train_loader, val_loader, vocab, device, patience=5):
     # Initialize MLflow
@@ -42,6 +43,8 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
         val_loss_history = []
         val_accuracy_history = []
         val_bleu_history = []
+
+        smooth = SmoothingFunction().method1
 
         for epoch in range(config.epochs):
             start_time = time.time()
@@ -88,7 +91,7 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
                         pred_seq = [p for p in pred_seq if p != vocab[config.pad_token]]
                         true_seq = [t for t in true_seq if t != vocab[config.pad_token]]
                         if len(pred_seq) > 0 and len(true_seq) > 0:
-                            score = sentence_bleu([true_seq], pred_seq, weights=(0.5, 0.5, 0, 0))
+                            score = sentence_bleu([true_seq], pred_seq, weights=(0.5, 0.5, 0, 0), smoothing_function=smooth)
                             val_bleu_scores.append(score)
 
             train_loss /= len(train_loader)
@@ -115,6 +118,7 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
             epoch_time = time.time() - start_time
             mlflow.log_metric("epoch_time", epoch_time, step=epoch)
 
+            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, f"checkpoint_epoch_{epoch+1}.pth")
             print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Accuracy: {val_accuracy:.4f} | Val BLEU: {val_bleu:.4f}")
 
             # Save checkpoint
@@ -130,23 +134,23 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
                 print(f"Early stopping triggered at epoch {epoch+1}.")
                 break
 
-            # Plot and save curves
-            plt.figure(figsize=(10, 5))
-            plt.subplot(1, 2, 1)
-            plt.plot(loss_history, label="Train Loss")
-            plt.plot(val_loss_history, label="Val Loss")
-            plt.xlabel("Epoch")
-            plt.ylabel("Loss")
-            plt.legend()
-            plt.subplot(1, 2, 2)
-            plt.plot(val_accuracy_history, label="Val Accuracy")
-            plt.plot(val_bleu_history, label="Val BLEU")
-            plt.xlabel("Epoch")
-            plt.ylabel("Metric")
-            plt.legend()
-            plt.tight_layout()
-            plt.savefig("training_curves.png")
-            mlflow.log_artifact("training_curves.png")
-            plt.close()
+        # Plot and save curves
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.plot(loss_history, label="Train Loss")
+        plt.plot(val_loss_history, label="Val Loss")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.legend()
+        plt.subplot(1, 2, 2)
+        plt.plot(val_accuracy_history, label="Val Accuracy")
+        plt.plot(val_bleu_history, label="Val BLEU")
+        plt.xlabel("Epoch")
+        plt.ylabel("Metric")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("training_curves.png")
+        mlflow.log_artifact("training_curves.png")
+        plt.close()
 
     return model

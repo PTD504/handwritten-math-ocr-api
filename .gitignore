@@ -16,3 +16,7 @@ env
 
 # Checkpoints
 checkpoints/
+
+# Model files
+trained-model/*
+!trained-model/readme.md
