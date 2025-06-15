@@ -119,11 +119,11 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
             epoch_time = time.time() - start_time
             mlflow.log_metric("epoch_time", epoch_time, step=epoch)
 
-            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_bleu, f"checkpoint_epoch_{epoch+1}.pth")
             print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Accuracy: {val_accuracy:.4f} | Val BLEU: {val_bleu:.4f}")
 
             # Save checkpoint
             if (epoch + 1) % 5 == 0:
+                save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_bleu, f"checkpoint_epoch_{epoch+1}.pth")
                 mlflow.log_artifact(os.path.join(config.checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth"))
             
             if val_bleu > best_val_bleu:
