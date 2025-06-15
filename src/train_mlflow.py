@@ -11,6 +11,7 @@ from tqdm import tqdm
 from model import FormulaRecognitionModel
 from config import config
 from utils import save_checkpoint
+import os
 
 def train_model(train_loader, val_loader, vocab, device, patience=5):
     # Initialize MLflow
@@ -122,10 +123,12 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
             print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Accuracy: {val_accuracy:.4f} | Val BLEU: {val_bleu:.4f}")
 
             # Save checkpoint
-            mlflow.log_artifact(f"checkpoint_{epoch+1}.pth")
+            if (epoch + 1) % 5 == 0:
+                mlflow.log_artifact(os.path.join(config.checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth"))
+            
             if val_bleu > best_val_bleu:
                 best_val_bleu = val_bleu
-                mlflow.log_artifact("best_model.pth")
+                mlflow.log_artifact(os.path.join(config.checkpoint_dir, "best_model.pth"))
                 no_improvement_epochs = 0
             else:
                 no_improvement_epochs += 1

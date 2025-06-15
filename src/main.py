@@ -1,7 +1,8 @@
 import torch
 from tqdm import tqdm
 from data_loader import create_vocab, get_data_loaders
-from train import train_model, load_and_continue_training
+# from train import train_model, load_and_continue_training
+from train_mlflow import train_model
 from utils import load_vocab
 from inference import predict
 from config import config
