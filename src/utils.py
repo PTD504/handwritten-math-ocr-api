@@ -12,7 +12,7 @@ def save_checkpoint(epoch, model, optimizer, scaler, scheduler, accuracy, filena
         'optimizer_state_dict': optimizer.state_dict(),
         'scaler_state_dict': scaler.state_dict(),  
         'scheduler_state_dict': scheduler.state_dict(),
-        'accuracy': accuracy,
+        'metric_value': accuracy,
     }
     torch.save(state, os.path.join(config.checkpoint_dir, filename))
 
@@ -30,7 +30,7 @@ def load_checkpoint(model, optimizer, scaler=None, scheduler=None, filename='bes
     if 'scheduler_state_dict' in checkpoint and scheduler is not None:
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
     
-    return checkpoint['epoch'], checkpoint['accuracy']
+    return checkpoint['epoch'], checkpoint['metric_value']
 
 def init_weights(m):
     if type(m) in [nn.Linear, nn.Conv2d, nn.Conv1d]:
