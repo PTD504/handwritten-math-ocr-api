@@ -21,22 +21,23 @@ def predict(images, model, vocab, idx2char, device, mode='greedy', beam_size=3):
     images = images.to(device)
     batch_size = images.size(0)
     with torch.no_grad():
-        encoder_out = model.encoder(images)  # [B, L, D]
+        images = images.unsqueeze(0)
+        encoder_out = model.encoder()
         
         if mode == 'greedy':
             ys = torch.full((batch_size, 1), vocab[config.sos_token], dtype=torch.long, device=device)
             finished = torch.zeros(batch_size, dtype=torch.bool, device=device)
 
             for _ in range(config.max_seq_len):
-                out = model.decoder(encoder_out, ys)  # [B, T, V]
-                next_token = out[:, -1, :].argmax(dim=-1, keepdim=True)  # [B, 1]
+                out = model.decoder(encoder_out, ys) 
+                next_token = out[:, -1, :].argmax(dim=-1, keepdim=True)  
                 ys = torch.cat([ys, next_token], dim=1)
 
                 finished |= (next_token.squeeze(1) == vocab[config.eos_token])
                 if finished.all():
                     break
 
-            sequences = ys  # [B, T]
+            sequences = ys 
         
         elif mode == 'beam':
             sequences = []

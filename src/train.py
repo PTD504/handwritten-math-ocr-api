@@ -10,14 +10,14 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 
 def train_model(train_loader, val_loader, vocab, device, patience=5, epochs=40):
     config.epochs = epochs
-    
+
     model = FormulaRecognitionModel(len(vocab)).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
     scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
     scheduler = CosineAnnealingLR(optimizer, T_max=config.epochs)
 
-    best_val_loss = 0.0
+    best_val_loss = float('inf')
     no_improvement_epochs = 0  # Counter for early stopping
 
     for epoch in range(config.epochs):

@@ -5,6 +5,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 import numpy as np
 from tqdm import tqdm
@@ -13,7 +14,9 @@ from config import config
 from utils import save_checkpoint
 import os
 
-def train_model(train_loader, val_loader, vocab, device, patience=5):
+def train_model(train_loader, val_loader, vocab, device, patience=5, epochs=40):
+    # Experiment with more epochs
+    config.epochs = epochs
     # Initialize MLflow
     mlflow.set_experiment("FormulaRecognition")
     with mlflow.start_run():
@@ -35,9 +38,10 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
         optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
         criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
         scaler = torch.amp.GradScaler('cuda')
-        scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
+        # scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
+        scheduler = CosineAnnealingLR(optimizer, T_max=config.epochs)
 
-        best_val_bleu = 0.0
+        best_val_loss = float('inf')
         no_improvement_epochs = 0
 
         loss_history = []
@@ -101,7 +105,7 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
             val_bleu = np.mean(val_bleu_scores) if val_bleu_scores else 0.0
 
             # Update learning rate
-            scheduler.step(val_bleu)
+            scheduler.step(val_loss)
 
             # Log metrics
             mlflow.log_metric("train_loss", train_loss, step=epoch)
@@ -126,9 +130,9 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
                 save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_bleu, f"checkpoint_epoch_{epoch+1}.pth")
                 mlflow.log_artifact(os.path.join(config.checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth"))
             
-            if val_bleu > best_val_bleu:
-                best_val_bleu = val_bleu
-                save_checkpoint(epoch + 1, model, optimizer, scaler, scheduler, val_bleu, "best_model.pth")
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                save_checkpoint(epoch + 1, model, optimizer, scaler, scheduler, val_loss, "best_model.pth")
                 mlflow.log_artifact(os.path.join(config.checkpoint_dir, "best_model.pth"))
                 no_improvement_epochs = 0
             else:
