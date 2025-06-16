@@ -5,18 +5,19 @@ from tqdm import tqdm
 from model import FormulaRecognitionModel
 from utils import save_checkpoint, load_checkpoint
 from config import config
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import CosineAnnealingLR
+# from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-
-def train_model(train_loader, val_loader, vocab, device, patience=5):
+def train_model(train_loader, val_loader, vocab, device, patience=5, epochs=40):
+    config.epochs = epochs
+    
     model = FormulaRecognitionModel(len(vocab)).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
     scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
-    scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
+    scheduler = CosineAnnealingLR(optimizer, T_max=config.epochs)
 
-    best_val_accuracy = 0.0
-    best_epoch = 0
+    best_val_loss = 0.0
     no_improvement_epochs = 0  # Counter for early stopping
 
     for epoch in range(config.epochs):
@@ -67,20 +68,19 @@ def train_model(train_loader, val_loader, vocab, device, patience=5):
         print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Accuracy: {val_accuracy:.4f}")
 
         # Step the scheduler
-        scheduler.step(val_accuracy)
+        scheduler.step(val_loss)
 
         for param_group in optimizer.param_groups:
             print(f"Learning Rate after epoch {epoch+1}: {param_group['lr']:.6f}")
         
-        # Save checkpoint with val_accuracy
-        save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, f"checkpoint_epoch_{epoch+1}.pth")
+        if (epoch + 1) % 5 == 0: 
+            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, f"checkpoint_epoch_{epoch+1}.pth")
         
         # Check for best model based on val_accuracy
-        if val_accuracy > best_val_accuracy:
-            best_val_accuracy = val_accuracy
-            best_epoch = epoch + 1
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
             no_improvement_epochs = 0  # Reset counter
-            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, "best_model.pth")
+            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, "best_model.pth")
         else:
             no_improvement_epochs += 1
 
@@ -96,11 +96,10 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token])
     scaler = torch.amp.GradScaler('cuda')  # Mixed precision training
-    scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
+    scheduler = CosineAnnealingLR(optimizer, T_max=config.epochs)
     
     # Load checkpoint
-    start_epoch, best_val_accuracy = load_checkpoint(model, optimizer, scaler, scheduler, checkpoint_filename)
-    best_epoch = start_epoch
+    start_epoch, best_val_loss = load_checkpoint(model, optimizer, scaler, scheduler, checkpoint_filename)
     no_improvement_epochs = 0  # Counter for early stopping
 
     # Continue training from saved checkpoint
@@ -152,20 +151,19 @@ def load_and_continue_training(train_loader, val_loader, vocab, device, checkpoi
         print(f"Epoch [{epoch+1}/{config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Accuracy: {val_accuracy:.4f}")
 
         # Step the scheduler
-        scheduler.step(val_accuracy)
+        scheduler.step(val_loss)
 
         for param_group in optimizer.param_groups:
             print(f"Learning Rate after epoch {epoch+1}: {param_group['lr']:.6f}")
         
-        # Save checkpoint with val_accuracy
-        save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, f"checkpoint_epoch_{epoch+1}.pth")
+        if (epoch + 1) % 5 == 0:
+            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, f"checkpoint_epoch_{epoch+1}.pth")
         
         # Check for best model based on val_accuracy
-        if val_accuracy > best_val_accuracy:
-            best_val_accuracy = val_accuracy
-            best_epoch = epoch + 1
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
             no_improvement_epochs = 0  # Reset counter
-            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_accuracy, "best_model.pth")
+            save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, val_loss, "best_model.pth")
         else:
             no_improvement_epochs += 1
 
