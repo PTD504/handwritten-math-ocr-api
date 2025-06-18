@@ -115,31 +115,3 @@ def load_vocab(filename='vocab.json'):
     vocab = data['vocab']
     idx2char = {int(k): v for k, v in data['idx2char'].items()}
     return vocab, idx2char
-
-def compute_bleu_score(predictions, references, tokenizer, eos_token="<eos>"):
-    """
-    Tính BLEU score trung bình cho toàn bộ batch.
-    
-    Args:
-        predictions (List[List[int]]): Danh sách các sequence ID dự đoán.
-        references (List[List[int]]): Danh sách các sequence ID ground truth.
-        tokenizer (Tokenizer): Đối tượng tokenizer để decode từ ID sang chuỗi token.
-        eos_token (str): Token kết thúc để dừng decode.
-
-    Returns:
-        float: BLEU score trung bình.
-    """
-    smoothie = SmoothingFunction().method4
-    scores = []
-
-    for pred_ids, ref_ids in zip(predictions, references):
-        pred_text = tokenizer.decode(pred_ids, eos_token).split()
-        ref_text = tokenizer.decode(ref_ids, eos_token).split()
-
-        if len(pred_text) == 0 or len(ref_text) == 0:
-            continue  # Tránh lỗi khi BLEU tính trên câu rỗng
-
-        score = sentence_bleu([ref_text], pred_text, smoothing_function=smoothie)
-        scores.append(score)
-
-    return sum(scores) / len(scores) if scores else 0.0
