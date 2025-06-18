@@ -36,7 +36,7 @@ class Config:
 
     num_workers = 4
     learning_rate = 3e-4
-    epochs = 20
+    epochs = 15
     max_seq_len = 150
     
     # Vocabulary settings
