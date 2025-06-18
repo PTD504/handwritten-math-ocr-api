@@ -3,34 +3,84 @@ import torch
 from config import config
 import torch.nn as nn
 import json
+from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
 from data_loader import create_vocab
+import numpy as np
+import editdistance
 
-def save_checkpoint(epoch, model, optimizer, scaler, scheduler, accuracy, filename):
-    state = {
+def compute_metrics(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_token):
+    """Compute all evaluation metrics: Edit Distance, CER and BLEU"""
+    # Decode predictions and targets
+    pred_strs = [tokenizer.decode(ids, eos_token=eos_token) for ids in pred_ids_list]
+    tgt_strs = [tokenizer.decode(ids, eos_token=eos_token) for ids in tgt_ids_list]
+    
+    # Compute edit distance (Levenshtein distance)
+    edit_distances = [
+        editdistance.eval(pred, tgt)
+        for pred, tgt in zip(pred_strs, tgt_strs)
+    ]
+    avg_edit_distance = np.mean(edit_distances)
+    
+    # Compute CER (Character Error Rate)
+    total_chars = sum(len(tgt) for tgt in tgt_strs)
+    total_errors = sum(editdistance.eval(pred, tgt) for pred, tgt in zip(pred_strs, tgt_strs))
+    avg_cer = total_errors / total_chars if total_chars > 0 else 0
+    
+    # Compute BLEU score
+    bleu_score = compute_bleu_score(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_token)
+    
+    return {
+        'edit_distance': avg_edit_distance,
+        'cer': avg_cer,
+        'bleu': bleu_score
+    }
+
+def compute_bleu_score(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_token):
+    """Compute BLEU score for mathematical formula recognition"""
+    references = []
+    hypotheses = []
+
+    for tgt_ids, pred_ids in zip(tgt_ids_list, pred_ids_list):
+        ref_str = tokenizer.decode(tgt_ids, eos_token=eos_token, pad_token=pad_token)
+        hyp_str = tokenizer.decode(pred_ids, eos_token=eos_token, pad_token=pad_token)
+        
+        ref_tokens = ref_str.split()
+        hyp_tokens = hyp_str.split()
+        
+        references.append([ref_tokens])  # List of references per sample
+        hypotheses.append(hyp_tokens)    # One hypothesis per sample
+
+    smoothie = SmoothingFunction().method4
+
+    bleu_score = corpus_bleu(
+        references,
+        hypotheses,
+        smoothing_function=smoothie,
+        weights=(0.25, 0.25, 0.25, 0.25)
+    )
+
+    return bleu_score
+
+def save_checkpoint(epoch, model, optimizer, scaler, scheduler, edit_dist, filename):
+    """Save training checkpoint"""
+    checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'scaler_state_dict': scaler.state_dict(),  
+        'scaler_state_dict': scaler.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
-        'metric_value': accuracy,
+        'edit_dist': edit_dist
     }
-    torch.save(state, os.path.join(config.checkpoint_dir, filename))
+    torch.save(checkpoint, os.path.join(config.checkpoint_dir, filename))
 
-
-def load_checkpoint(model, optimizer, scaler=None, scheduler=None, filename='best_model.pth'):
-    checkpoint = torch.load(os.path.join(config.checkpoint_dir, filename))
+def load_checkpoint(model, optimizer, scaler, scheduler, filename):
+    """Load training checkpoint"""
+    checkpoint = torch.load(os.path.join(config.checkpoint_dir, filename), map_location="cpu")
     model.load_state_dict(checkpoint['model_state_dict'])
-    
-    if 'optimizer_state_dict' in checkpoint and optimizer is not None:
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    
-    if 'scaler_state_dict' in checkpoint and scaler is not None:
-        scaler.load_state_dict(checkpoint['scaler_state_dict'])
-
-    if 'scheduler_state_dict' in checkpoint and scheduler is not None:
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    
-    return checkpoint['epoch'], checkpoint['metric_value']
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    scaler.load_state_dict(checkpoint['scaler_state_dict'])
+    scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    return checkpoint['epoch'], checkpoint['edit_dist']
 
 def init_weights(m):
     if type(m) in [nn.Linear, nn.Conv2d, nn.Conv1d]:
@@ -66,5 +116,30 @@ def load_vocab(filename='vocab.json'):
     idx2char = {int(k): v for k, v in data['idx2char'].items()}
     return vocab, idx2char
 
-def get_vocab_size(vocab):
-    return len(vocab)
+def compute_bleu_score(predictions, references, tokenizer, eos_token="<eos>"):
+    """
+    Tính BLEU score trung bình cho toàn bộ batch.
+    
+    Args:
+        predictions (List[List[int]]): Danh sách các sequence ID dự đoán.
+        references (List[List[int]]): Danh sách các sequence ID ground truth.
+        tokenizer (Tokenizer): Đối tượng tokenizer để decode từ ID sang chuỗi token.
+        eos_token (str): Token kết thúc để dừng decode.
+
+    Returns:
+        float: BLEU score trung bình.
+    """
+    smoothie = SmoothingFunction().method4
+    scores = []
+
+    for pred_ids, ref_ids in zip(predictions, references):
+        pred_text = tokenizer.decode(pred_ids, eos_token).split()
+        ref_text = tokenizer.decode(ref_ids, eos_token).split()
+
+        if len(pred_text) == 0 or len(ref_text) == 0:
+            continue  # Tránh lỗi khi BLEU tính trên câu rỗng
+
+        score = sentence_bleu([ref_text], pred_text, smoothing_function=smoothie)
+        scores.append(score)
+
+    return sum(scores) / len(scores) if scores else 0.0

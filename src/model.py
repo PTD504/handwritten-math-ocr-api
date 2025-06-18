@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from torch.nn import TransformerDecoder, TransformerDecoderLayer
+from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from config import config
 
 class EncoderCNN(nn.Module):

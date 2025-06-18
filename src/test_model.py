@@ -51,8 +51,9 @@ def calculate_metrics(pred, truth):
         cer = Levenshtein.distance(pred, truth) / max(len(truth), 1)
     except ImportError:
         logger.warning("Levenshtein package not found, using difflib")
-        from difflib import SequenceMatcher
-        cer = 1 - SequenceMatcher(None, pred, truth).ratio()
+    
+    from difflib import SequenceMatcher
+    cer = 1 - SequenceMatcher(None, pred, truth).ratio()
     
     is_correct = pred == truth
     return is_correct, cer
