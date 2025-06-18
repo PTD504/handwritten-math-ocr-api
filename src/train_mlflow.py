@@ -97,7 +97,7 @@ def train_model(train_loader, val_loader, vocab, tokenizer, device, patience=5):
 
             scheduler.step(val_loss)
 
-            if (epoch + 1) % 1 == 0:
+            if (epoch + 1) % 5 == 0:
                 ckpt_path = os.path.join(config.checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth")
                 save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, metrics['edit_distance'], ckpt_path)
                 mlflow.log_artifact(ckpt_path)
