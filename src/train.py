@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
-from model_swin import FormulaRecognitionModel
+from model import FormulaRecognitionModel
 # from model_res18trans import FormulaRecognitionModel
+# from model_swin import FormulaRecognitionModel
 from utils import save_checkpoint, load_checkpoint, compute_metrics
 from config import config
 from torch.optim.lr_scheduler import ReduceLROnPlateau

@@ -7,8 +7,8 @@ import torch.nn as nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 from tqdm import tqdm
-from model_res18trans import FormulaRecognitionModel
-# from model import FormulaRecognitionModel
+from model import FormulaRecognitionModel
+# from model_res18trans import FormulaRecognitionModel
 # from model_swin import FormulaRecognitionModel
 from config import config
 from utils import save_checkpoint, load_checkpoint, compute_metrics
@@ -37,7 +37,7 @@ def train_model(train_loader, val_loader, vocab, tokenizer, device, patience=5):
         mlflow.log_param("batch_size", config.batch_size)
         mlflow.log_param("epochs", config.epochs)
         # Based on the architecture of model you are using
-        mlflow.log_param("model architecture", "ENCODER: ResNet18 + Transformer - DECODER: Transformer")
+        mlflow.log_param("model architecture", "ENCODER: ResNet18 - DECODER: Transformer decoder layers")
         mlflow.log_param("dropout", config.dropout)
         mlflow.log_param("max_seq_len", config.max_seq_len)
         mlflow.log_param("vocab_size", len(vocab))
@@ -134,8 +134,8 @@ def train_model(train_loader, val_loader, vocab, tokenizer, device, patience=5):
         plt.ylabel("Metric")
         plt.legend()
         plt.tight_layout()
-        plt.savefig(f"training_curves_{config.epochs}.png")
-        mlflow.log_artifact(f"training_curves_{config.epochs}.png")
+        plt.savefig(f"training_curves.png")
+        mlflow.log_artifact(f"training_curves.png")
         plt.close()
 
     return model
@@ -247,8 +247,8 @@ def load_and_continue_training(train_loader, val_loader, vocab, tokenizer, devic
         plt.ylabel("Metric")
         plt.legend()
         plt.tight_layout()
-        plt.savefig(f"training_curves_{config.epochs}.png")
-        mlflow.log_artifact(f"training_curves_{config.epochs}.png")
+        plt.savefig("training_curves.png")
+        mlflow.log_artifact("training_curves.png")
         plt.close()
 
     return model
