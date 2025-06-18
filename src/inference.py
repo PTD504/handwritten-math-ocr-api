@@ -22,7 +22,7 @@ def predict(images, model, vocab, idx2char, device, mode='greedy', beam_size=3):
     batch_size = images.size(0)
     with torch.no_grad():
         images = images.unsqueeze(0)
-        encoder_out = model.encoder()
+        encoder_out = model.encoder(images)
         
         if mode == 'greedy':
             ys = torch.full((batch_size, 1), vocab[config.sos_token], dtype=torch.long, device=device)

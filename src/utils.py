@@ -11,8 +11,8 @@ import editdistance
 def compute_metrics(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_token):
     """Compute all evaluation metrics: Edit Distance, CER and BLEU"""
     # Decode predictions and targets
-    pred_strs = [tokenizer.decode(ids, eos_token=eos_token) for ids in pred_ids_list]
-    tgt_strs = [tokenizer.decode(ids, eos_token=eos_token) for ids in tgt_ids_list]
+    pred_strs = [tokenizer.decode(ids, eos_token=eos_token, pad_token=pad_token) for ids in pred_ids_list]
+    tgt_strs = [tokenizer.decode(ids, eos_token=eos_token, pad_token=pad_token) for ids in tgt_ids_list]
     
     # Compute edit distance (Levenshtein distance)
     edit_distances = [
@@ -61,7 +61,7 @@ def compute_bleu_score(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_to
 
     return bleu_score
 
-def save_checkpoint(epoch, model, optimizer, scaler, scheduler, edit_dist, filename):
+def save_checkpoint(epoch, model, optimizer, scaler, scheduler, metric_value, filename):
     """Save training checkpoint"""
     checkpoint = {
         'epoch': epoch,
@@ -69,7 +69,7 @@ def save_checkpoint(epoch, model, optimizer, scaler, scheduler, edit_dist, filen
         'optimizer_state_dict': optimizer.state_dict(),
         'scaler_state_dict': scaler.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
-        'edit_dist': edit_dist
+        'metric_value': metric_value
     }
     torch.save(checkpoint, os.path.join(config.checkpoint_dir, filename))
 
@@ -80,7 +80,7 @@ def load_checkpoint(model, optimizer, scaler, scheduler, filename):
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     scaler.load_state_dict(checkpoint['scaler_state_dict'])
     scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    return checkpoint['epoch'], checkpoint['edit_dist']
+    return checkpoint['epoch'], checkpoint['metric_value']
 
 def init_weights(m):
     if type(m) in [nn.Linear, nn.Conv2d, nn.Conv1d]:

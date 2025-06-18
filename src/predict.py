@@ -8,11 +8,14 @@ from model import FormulaRecognitionModel
 from config import config
 
 # === Cấu hình ===
-model_path = os.path.join(os.path.dirname(os.getcwd()), 'checkpoints', 'best_model.pth')
-image_test_path = "Path/to/your/test/image.png"  # Thay đổi đường dẫn tới ảnh test
+# model_path = os.path.join(os.path.dirname(os.getcwd()), 'checkpoints', 'checkpoint_epoch_30.pth')
+model_path = r"E:\SchoolWork\CS338\final-project\handwritten-math-ocr-api\checkpoints\best_model_val_loss.pth"
+# image_test_path = "Path/to/your/test/image.png"  # Thay đổi đường dẫn tới ảnh test
+image_test_path = r"E:\SchoolWork\CS338\final-project\collect-data\CHROME\he-phuong-trinh-removebg-preview.png"
 vocab_path = os.path.join(os.path.dirname(os.getcwd()), 'checkpoints', 'vocab.json')
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cpu"
 
 # === Load vocab ===
 with open(vocab_path, 'r', encoding='utf-8') as f:
