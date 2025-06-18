@@ -18,25 +18,25 @@ class Config:
     img_h = 96
     d_model = 384
     nhead = 8
+    dim_feedforward = 1024
+    dropout = 0.2
 
     # Encoder: ResNet18 only
     res18_num_decoder_layers = 12
 
     # Encoder: ResNet18 + Transformer encoder layer
-    res18trans_num_encoder_layers = 12
-    res18trans_num_decoder_layers = 12
+    res18trans_num_encoder_layers = 6
+    res18trans_num_decoder_layers = 6
 
     # Encoder: Swin Transformer
-    swin_num_decoder_layers = 8
-    dim_feedforward = 1024
-    dropout = 0.2
+    swin_num_decoder_layers = 6
     
     # Training parameters
     batch_size = 64
 
-    num_workers = 8
+    num_workers = 4
     learning_rate = 3e-4
-    epochs = 30
+    epochs = 20
     max_seq_len = 150
     
     # Vocabulary settings
@@ -48,8 +48,5 @@ class Config:
     
     # Inference
     beam_size = 5
-
-    # Some variable for efficient training on Kaggle
-    start_training = True
 
 config = Config()

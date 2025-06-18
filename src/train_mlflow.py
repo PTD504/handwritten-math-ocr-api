@@ -8,16 +8,13 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 from tqdm import tqdm
 from model_res18trans import FormulaRecognitionModel
+# from model import FormulaRecognitionModel
 # from model_swin import FormulaRecognitionModel
 from config import config
 from utils import save_checkpoint, load_checkpoint, compute_metrics
 import os
 
 def train_model(train_loader, val_loader, vocab, tokenizer, device, patience=5):
-    # Check if this is a training process from starting or from checkpoint
-    if config.start_training:
-        config.epochs = 15
-        
     model = FormulaRecognitionModel(len(vocab)).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab[config.pad_token], label_smoothing=0.1)
@@ -39,6 +36,7 @@ def train_model(train_loader, val_loader, vocab, tokenizer, device, patience=5):
         mlflow.log_param("learning_rate", config.learning_rate)
         mlflow.log_param("batch_size", config.batch_size)
         mlflow.log_param("epochs", config.epochs)
+        # Based on the architecture of model you are using
         mlflow.log_param("model architecture", "ENCODER: ResNet18 + Transformer - DECODER: Transformer")
         mlflow.log_param("dropout", config.dropout)
         mlflow.log_param("max_seq_len", config.max_seq_len)
@@ -99,7 +97,7 @@ def train_model(train_loader, val_loader, vocab, tokenizer, device, patience=5):
 
             scheduler.step(val_loss)
 
-            if (epoch + 1) % 5 == 0:
+            if (epoch + 1) % 1 == 0:
                 ckpt_path = os.path.join(config.checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth")
                 save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, metrics['edit_distance'], ckpt_path)
                 mlflow.log_artifact(ckpt_path)
@@ -108,7 +106,7 @@ def train_model(train_loader, val_loader, vocab, tokenizer, device, patience=5):
                 best_val_edit_dist = metrics['edit_distance']
                 no_improvement_epochs = 0
                 save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, metrics['edit_distance'], "best_model.pth")
-                mlflow.pytorch.log_model(model, "best_model")
+                mlflow.pytorch.log_model(model, name="best_model")
                 print(f"New best model saved with edit distance: {best_val_edit_dist:.2f}")
             else:
                 no_improvement_epochs += 1

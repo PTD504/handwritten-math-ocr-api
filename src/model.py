@@ -60,7 +60,7 @@ class DecoderTransformer(nn.Module):
             config.dim_feedforward, 
             config.dropout
         )
-        self.transformer_decoder = TransformerDecoder(decoder_layer, config.num_decoder_layers)
+        self.transformer_decoder = TransformerDecoder(decoder_layer, config.res18_num_decoder_layers)
         self.fc_out = nn.Linear(config.d_model, vocab_size)
         
         # Tạo mask cho sequence
