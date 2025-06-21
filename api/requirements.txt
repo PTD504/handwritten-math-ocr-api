@@ -4,8 +4,6 @@ pandas==2.2.3
 opencv-python==4.8.0.76
 tqdm==4.65.0
 numpy==1.24.4
-python-Levenshtein==0.23.0
-pylatexenc==2.10
 pillow==9.5.0
 python-dotenv==0.21.0
 fastapi==0.95.0

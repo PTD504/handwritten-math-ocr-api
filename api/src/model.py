@@ -1,68 +1,68 @@
 import torch
 import torch.nn as nn
-import torchvision.models as models
 from torch.nn import TransformerDecoder, TransformerDecoderLayer
+import torchvision
 from config import config
 
-class EncoderCNN(nn.Module):
+"""
+Model Architecture:
+Encoder: Swin Transformer (Tiny)
+Decoder: Transformer
+"""
+
+class EncoderSwin(nn.Module):
     def __init__(self):
         super().__init__()
-        # Load ResNet18 với pretrained weights
-        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        # Swin-Tiny Transformer encoder
+        self.swin = torchvision.models.swin_t(weights=torchvision.models.Swin_T_Weights.DEFAULT)
         
-        # Điều chỉnh layer đầu vào cho ảnh grayscale
-        original_first_conv = resnet.conv1
-        resnet.conv1 = nn.Conv2d(
-            in_channels=1,  # 1 kênh thay vì 3
-            out_channels=original_first_conv.out_channels,
-            kernel_size=original_first_conv.kernel_size,
-            stride=original_first_conv.stride,
-            padding=original_first_conv.padding,
-            bias=original_first_conv.bias
+        original_conv = self.swin.features[0][0]
+        new_conv = nn.Conv2d(
+            in_channels=1,
+            out_channels=original_conv.out_channels,
+            kernel_size=original_conv.kernel_size,
+            stride=original_conv.stride,
+            padding=original_conv.padding,
+            bias=original_conv.bias is not None
         )
         
-        # Copy weights từ kênh R của pretrained model
         with torch.no_grad():
-            resnet.conv1.weight[:, 0:1, :, :].copy_(original_first_conv.weight[:, 0:1, :, :])
+            new_conv.weight.copy_(torch.mean(original_conv.weight, dim=1, keepdim=True))
+            if original_conv.bias is not None:
+                new_conv.bias.copy_(original_conv.bias)
         
-        # Chỉ lấy các layers feature extraction
-        self.features = nn.Sequential(*list(resnet.children())[:-2])
+        self.swin.features[0][0] = new_conv
+        self.features = self.swin.features
         
-        # Adaptive pooling để xử lý kích thước ảnh khác nhau
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, None))
-        
-        # Projection layer để giảm chiều
-        self.projection = nn.Linear(512, config.d_model)
+        self.projection = nn.Linear(768, config.d_model)
 
     def forward(self, x):
-        # Forward qua ResNet
-        x = self.features(x)  # [batch, 512, h', w']
+        x = self.features(x)
+
+        batch, height, width, channels = x.shape        
+        x = x.view(batch, height * width, channels)
         
-        # Adaptive pooling
-        x = self.adaptive_pool(x)  # [batch, 512, 1, w'']
-        
-        # Projection và điều chỉnh kích thước
-        x = x.permute(0, 3, 2, 1)  # [batch, w'', 1, 512]
-        x = self.projection(x)      # [batch, w'', 1, d_model]
-        
-        return x.squeeze(2)  # [batch, w'', d_model]
+        x = self.projection(x)  
+        return x
+
 
 class DecoderTransformer(nn.Module):
     def __init__(self, vocab_size):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, config.d_model)
+        
         self.pos_encoder = nn.Embedding(config.max_seq_len, config.d_model)
         
         decoder_layer = TransformerDecoderLayer(
-            config.d_model, 
-            config.nhead, 
-            config.dim_feedforward, 
-            config.dropout
+            d_model=config.d_model,
+            nhead=config.nhead,
+            dim_feedforward=config.dim_feedforward,
+            dropout=config.dropout
         )
-        self.transformer_decoder = TransformerDecoder(decoder_layer, config.num_decoder_layers)
+        self.decoder = TransformerDecoder(decoder_layer, num_layers=config.swin_num_decoder_layers)
+        
         self.fc_out = nn.Linear(config.d_model, vocab_size)
         
-        # Tạo mask cho sequence
         self.register_buffer("tgt_mask", self.generate_square_subsequent_mask(config.max_seq_len))
 
     def generate_square_subsequent_mask(self, sz):
@@ -70,28 +70,32 @@ class DecoderTransformer(nn.Module):
         return mask
 
     def forward(self, encoder_out, tgt):
-        # Embedding + positional encoding
         tgt_embed = self.embedding(tgt)
         positions = torch.arange(0, tgt.size(1)).unsqueeze(0).to(tgt.device)
         tgt_embed = tgt_embed + self.pos_encoder(positions)
         
-        # Transformer decoder
         tgt_embed = tgt_embed.permute(1, 0, 2)
-        output = self.transformer_decoder(
-            tgt_embed, 
-            encoder_out.permute(1, 0, 2),
+        encoder_out = encoder_out.permute(1, 0, 2)
+        
+
+        output = self.decoder(
+            tgt_embed,
+            encoder_out,
             tgt_mask=self.tgt_mask[:tgt.size(1), :tgt.size(1)]
         )
+        
         output = self.fc_out(output.permute(1, 0, 2))
         return output
+
 
 class FormulaRecognitionModel(nn.Module):
     def __init__(self, vocab_size):
         super().__init__()
-        self.encoder = EncoderCNN()
+        self.encoder = EncoderSwin()
         self.decoder = DecoderTransformer(vocab_size)
 
     def forward(self, images, captions):
-        features = self.encoder(images)  # [batch, seq_len, d_model]
-        outputs = self.decoder(features, captions[:, :-1])  # Bỏ token cuối
+        features = self.encoder(images)
+        
+        outputs = self.decoder(features, captions[:, :-1])
         return outputs
