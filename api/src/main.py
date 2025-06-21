@@ -3,10 +3,10 @@ from fastapi.responses import JSONResponse
 import torch
 from PIL import Image
 import io
-from src.preprocess import preprocess_image
-from src.im2latex import load_model, predict
-from src.utils import load_vocab
-from src.config import config
+from preprocess import preprocess_image
+from im2latex import load_model, predict
+from utils import load_vocab
+from config import config
 import os
 
 app = FastAPI()
