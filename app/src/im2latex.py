@@ -4,8 +4,10 @@ from utils import tokens_to_latex, clean_latex_output
 from config import config
 from model import FormulaRecognitionModel
 
-def load_model(model_path: str, device):
-    model = torch.load(model_path, map_location=device, weights_only=False)    
+def load_model(model_path: str, len_vocab, device):
+    model = FormulaRecognitionModel(len_vocab).to(device)
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     
     return model
