@@ -1,4 +1,3 @@
-# file build_vocab.py
 from utils import create_vocab, save_vocab
 from config import config
 

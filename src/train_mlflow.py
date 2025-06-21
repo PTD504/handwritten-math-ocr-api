@@ -116,7 +116,9 @@ def train_model(train_loader, val_loader, vocab, tokenizer, device, patience=5):
                 print(f"Early stopping triggered at epoch {epoch+1}")
                 break
         
-        cer_normalized = [(1 - cer) for cer in cer_history]
+        bleu_inversed = [(1 - bleu) for bleu in bleu_score_history]
+        max_edit = max(editdist_history)
+        levenshtein_normalized = [x / max_edit for x in editdist_history]
 
         # Plot and save curves
         plt.figure(figsize=(10, 5))
@@ -127,9 +129,9 @@ def train_model(train_loader, val_loader, vocab, tokenizer, device, patience=5):
         plt.ylabel("Loss")
         plt.legend()
         plt.subplot(1, 2, 2)
-        plt.plot(bleu_score_history, label="BLEU score")
-        plt.plot(editdist_history, label="Levenshtein distance")
-        plt.plot(cer_normalized, label="Inversed CER (1 - CER)")
+        plt.plot(bleu_inversed, label="Inversed BLEU score (1 - BLEU)")
+        plt.plot(levenshtein_normalized, label="Levenshtein distance normalized")
+        plt.plot(cer_history, label="CER")
         plt.xlabel("Epoch")
         plt.ylabel("Metric")
         plt.legend()
@@ -208,13 +210,16 @@ def load_and_continue_training(train_loader, val_loader, vocab, tokenizer, devic
             scheduler.step(val_loss)
 
             if (epoch + 1) % 5 == 0:
+                ckpt_path = os.path.join(config.checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth")
                 save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, metrics['edit_distance'],
                                 f"checkpoint_epoch_{epoch+1}.pth")
+                mlflow.log_artifact(ckpt_path)
 
             if metrics['edit_distance'] < best_val_edit_dist:
                 best_val_edit_dist = metrics['edit_distance']
                 no_improvement_epochs = 0
                 save_checkpoint(epoch+1, model, optimizer, scaler, scheduler, metrics['edit_distance'], "best_model.pth")
+                mlflow.pytorch.log_model(model, name="best_model")
                 print(f"New best model saved with edit distance: {best_val_edit_dist:.2f}")
             else:
                 no_improvement_epochs += 1
@@ -223,13 +228,12 @@ def load_and_continue_training(train_loader, val_loader, vocab, tokenizer, devic
             if no_improvement_epochs >= patience:
                 print(f"Early stopping triggered at epoch {epoch+1}")
                 break
-        
-        cer_normalized = [(1 - cer) for cer in cer_history]
 
-        if config.epcohs < 30:
-            epochs = list(range(1, config.epochs + 1))
-        else:
-            epochs = list(range(15, config.epochs + 1))
+        epochs = list(range(start_epoch, config.epochs))
+
+        bleu_inversed = [(1 - bleu) for bleu in bleu_score_history]
+        max_edit = max(editdist_history)
+        levenshtein_normalized = [x / max_edit for x in editdist_history]
 
         # Plot and save curves
         plt.figure(figsize=(10, 5))
@@ -240,15 +244,15 @@ def load_and_continue_training(train_loader, val_loader, vocab, tokenizer, devic
         plt.ylabel("Loss")
         plt.legend()
         plt.subplot(1, 2, 2)
-        plt.plot(epochs, bleu_score_history, label="BLEU score")
-        plt.plot(epochs, editdist_history, label="Levenshtein distance")
-        plt.plot(epochs, cer_normalized, label="Inversed CER (1 - CER)")
+        plt.plot(epochs, bleu_inversed, label="Inversed BLEU score (1 - BLEU)")
+        plt.plot(epochs, levenshtein_normalized, label="Levenshtein distance normalized")
+        plt.plot(epochs, cer_history, label="CER")
         plt.xlabel("Epoch")
         plt.ylabel("Metric")
         plt.legend()
         plt.tight_layout()
-        plt.savefig("training_curves.png")
-        mlflow.log_artifact("training_curves.png")
+        plt.savefig(f"training_curves.png")
+        mlflow.log_artifact(f"training_curves.png")
         plt.close()
 
     return model

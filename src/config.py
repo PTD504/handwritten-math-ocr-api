@@ -16,20 +16,20 @@ class Config:
     # Model parameters
     img_w = 320
     img_h = 96
-    d_model = 384
+    d_model = 256
     nhead = 8
-    dim_feedforward = 1024
+    dim_feedforward = 512
     dropout = 0.2
 
     # Encoder: ResNet18 only
-    res18_num_decoder_layers = 12
+    res18_num_decoder_layers = 8
 
     # Encoder: ResNet18 + Transformer encoder layer
-    res18trans_num_encoder_layers = 6
-    res18trans_num_decoder_layers = 6
+    res18trans_num_encoder_layers = 8
+    res18trans_num_decoder_layers = 8
 
     # Encoder: Swin Transformer
-    swin_num_decoder_layers = 6
+    swin_num_decoder_layers = 8
     
     # Training parameters
     batch_size = 64

@@ -9,8 +9,7 @@ import numpy as np
 import editdistance
 
 def compute_metrics(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_token):
-    """Compute all evaluation metrics: Edit Distance, CER and BLEU"""
-    # Decode predictions and targets
+    # Compute all evaluation metrics: Edit Distance, CER and BLEU
     pred_strs = [tokenizer.decode(ids, eos_token=eos_token, pad_token=pad_token) for ids in pred_ids_list]
     tgt_strs = [tokenizer.decode(ids, eos_token=eos_token, pad_token=pad_token) for ids in tgt_ids_list]
     
@@ -36,7 +35,6 @@ def compute_metrics(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_token
     }
 
 def compute_bleu_score(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_token):
-    """Compute BLEU score for mathematical formula recognition"""
     references = []
     hypotheses = []
 
@@ -47,8 +45,8 @@ def compute_bleu_score(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_to
         ref_tokens = ref_str.split()
         hyp_tokens = hyp_str.split()
         
-        references.append([ref_tokens])  # List of references per sample
-        hypotheses.append(hyp_tokens)    # One hypothesis per sample
+        references.append([ref_tokens])  
+        hypotheses.append(hyp_tokens)
 
     smoothie = SmoothingFunction().method4
 
@@ -62,7 +60,7 @@ def compute_bleu_score(pred_ids_list, tgt_ids_list, tokenizer, eos_token, pad_to
     return bleu_score
 
 def save_checkpoint(epoch, model, optimizer, scaler, scheduler, metric_value, filename):
-    """Save training checkpoint"""
+    # Save training checkpoint
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
@@ -74,7 +72,7 @@ def save_checkpoint(epoch, model, optimizer, scaler, scheduler, metric_value, fi
     torch.save(checkpoint, os.path.join(config.checkpoint_dir, filename))
 
 def load_checkpoint(model, optimizer, scaler, scheduler, filename):
-    """Load training checkpoint"""
+    # Load training checkpoint
     checkpoint = torch.load(os.path.join(config.checkpoint_dir, filename), map_location="cpu")
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

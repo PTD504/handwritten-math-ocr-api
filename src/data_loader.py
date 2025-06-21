@@ -29,19 +29,16 @@ class MathFormulaDataset(Dataset):
         img_path = os.path.join(self.img_dir, img_name)
         img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
         
-        # Resize với padding
         img = cv2.resize(img, (config.img_w, config.img_h))
         img = Image.fromarray(img, mode='L')
         img = self.transform(img)
         
-        # Chuyển label thành token IDs
         token_ids = [self.vocab[config.sos_token]]
         tokens = tokenize_latex(label)
         token_ids += [self.vocab.get(token, self.vocab[config.unk_token]) for token in tokens]
         token_ids.append(self.vocab[config.eos_token])
         
-        # Padding sequence
-        length = len(token_ids)  # trước khi padding
+        length = len(token_ids)
         padded_ids = token_ids[:config.max_seq_len]
         if len(padded_ids) < config.max_seq_len:
             padded_ids += [self.vocab[config.pad_token]] * (config.max_seq_len - len(padded_ids))
@@ -49,7 +46,6 @@ class MathFormulaDataset(Dataset):
         return img, torch.tensor(padded_ids), length
 
 def tokenize_latex(formula: str):
-    # Tách theo các đơn vị LaTeX (command, symbols, letters, etc.)
     token_pattern = r'(\\[a-zA-Z]+|[{}_^$%&#]|[0-9]+|[a-zA-Z]+|[^\s])'
     tokens = re.findall(token_pattern, formula)
     return tokens

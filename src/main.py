@@ -1,10 +1,10 @@
 import torch
 from tqdm import tqdm
 from data_loader import create_vocab, get_data_loaders
-from train_mlflow import train_model, load_and_continue_training
+# from train_mlflow import train_model, load_and_continue_training
+from train import train_model, load_and_continue_training
 from utils import load_vocab
 from inference import predict
-from config import config
 from tokenizer import Tokenizer
 import pandas as pd
 
@@ -28,7 +28,9 @@ def main():
     
     # Inference
     test_image = next(iter(val_loader))[0][0]
-    prediction = predict(test_image, model, vocab, idx2char, device)
+    test_image = test_image.unsqueeze(0)
+
+    prediction = predict(test_image, model, vocab, idx2char, device, model='beam')
     print(f"Prediction: {prediction}")
 
 if __name__ == "__main__":
