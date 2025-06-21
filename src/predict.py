@@ -71,4 +71,5 @@ if __name__ == "__main__":
     image_tensor = preprocess_image(image_test_path)
     tokens = predict(image_tensor)
     latex_output = ' '.join(tokens)
+
     print("Predicted LaTeX:", latex_output)
