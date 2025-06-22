@@ -59,7 +59,7 @@ class DecoderTransformer(nn.Module):
             dim_feedforward=config.dim_feedforward,
             dropout=config.dropout
         )
-        self.decoder = TransformerDecoder(decoder_layer, num_layers=config.swin_num_decoder_layers)
+        self.decoder = TransformerDecoder(decoder_layer, num_layers=config.num_decoder_layers)
         
         self.fc_out = nn.Linear(config.d_model, vocab_size)
         
@@ -97,5 +97,5 @@ class FormulaRecognitionModel(nn.Module):
     def forward(self, images, captions):
         features = self.encoder(images)
         
-        outputs = self.decoder(features, captions[:, :-1])
+        outputs = self.decoder(features, captions)
         return outputs

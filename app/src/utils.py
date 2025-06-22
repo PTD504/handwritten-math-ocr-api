@@ -7,8 +7,8 @@ def tokenize_latex(formula: str) -> list:
     tokens = re.findall(token_pattern, formula)
     return tokens
 
-def load_vocab(filename: str = 'vocab.json') -> tuple:
-    with open(f'{config.model_dir}/{filename}', 'r', encoding='utf-8') as f:
+def load_vocab(filepath: str) -> tuple:
+    with open(filepath, 'r', encoding='utf-8') as f:
         data = json.load(f)
     vocab = data['vocab']
     idx2char = {int(k): v for k, v in data['idx2char'].items()}

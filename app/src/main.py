@@ -68,7 +68,6 @@ class HealthResponse(BaseModel):
 
 class BatchPredictionRequest(BaseModel):
     images: List[str]
-    beam_size: int = 3
 
 def initialize_model():
     global device, vocab, idx2char, model, model_load_time
@@ -158,10 +157,11 @@ async def root():
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_formula(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    beam_size: int = Query(3, ge=1, le=10)
+    file: UploadFile = File(...)
 ):
     start_time = time.time()
+
+    confidence = 0.0
     
     try:
         validate_image_file(file)
@@ -171,7 +171,7 @@ async def predict_formula(
         
         processed_image = preprocess_image(image)
         
-        formula, confidence = predict(processed_image, model, vocab, idx2char, device, beam_size=beam_size)
+        formula, confidence = predict(model, processed_image, vocab, idx2char, device)
         
         processing_time = time.time() - start_time
         
@@ -217,7 +217,7 @@ async def predict_batch(
                 # Preprocess and predict
                 processed_image = preprocess_image(image)
                 
-                formula, confidence_score = predict(processed_image, model, vocab, idx2char, device, beam_size=request.beam_size)
+                formula, confidence_score = predict(processed_image, model, vocab, idx2char, device)
                 
                 if isinstance(formula, list):
                     formula = formula[0] if formula else ""
