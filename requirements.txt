@@ -11,8 +11,6 @@ pylatexenc==2.10
 pillow==9.5.0
 python-dotenv==0.21.0
 python-multipart==0.0.20
-fastapi==0.95.0
-uvicorn==0.22.0
 
 # If you want to use MLflow during training
 mlflow==3.1.0
