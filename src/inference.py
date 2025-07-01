@@ -3,7 +3,8 @@ from torch.nn import functional as F
 from model import FormulaRecognitionModel
 from config import config
 
-def predict(images, model, vocab, idx2char, device, mode='greedy', beam_size=3):
+# Using greedy search for simplicity
+def predict(images, model, vocab, idx2char, device, beam_size=3):
     model.eval()
     images = images.to(device)
     batch_size = images.size(0)

@@ -30,7 +30,7 @@ def main():
     test_image = next(iter(val_loader))[0][0]
     test_image = test_image.unsqueeze(0)
 
-    prediction = predict(test_image, model, vocab, idx2char, device, model='beam')
+    prediction = predict(test_image, model, vocab, idx2char, device)
     print(f"Prediction: {prediction}")
 
 if __name__ == "__main__":
