@@ -1,5 +1,4 @@
 # Handwritten Math OCR API
-[![Ask DeepWiki](https://devin.ai/assets/askdeepwiki.png)](https://deepwiki.com/PTD504/handwritten-math-ocr-api)
 
 This repository provides a complete solution for converting images of handwritten mathematical equations into LaTeX format. It includes a high-performance REST API for inference and a full suite of scripts for training your own models.
 
