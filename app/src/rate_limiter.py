@@ -1,8 +1,3 @@
-"""
-Rate limiting module for FastAPI application
-Provides protection against DDoS attacks and API abuse
-"""
-
 import time
 import asyncio
 from typing import Dict, Optional, Tuple
@@ -21,7 +16,6 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 class RateLimitType(Enum):
-    """Types of rate limits"""
     REQUESTS_PER_MINUTE = "requests_per_minute"
     REQUESTS_PER_HOUR = "requests_per_hour"
     REQUESTS_PER_DAY = "requests_per_day"
@@ -29,22 +23,19 @@ class RateLimitType(Enum):
 
 @dataclass
 class RateLimitConfig:
-    """Configuration for rate limiting"""
     requests_per_minute: int = 10
     requests_per_hour: int = 100
     requests_per_day: int = 500
     concurrent_requests: int = 5
-    burst_threshold: int = 20  # Maximum burst requests
-    burst_window: int = 60  # Burst window in seconds
-    block_duration: int = 300  # Block duration in seconds for abuse
+    burst_threshold: int = 20
+    burst_window: int = 60
+    block_duration: int = 300
     
     # Special limits for authenticated vs anonymous users
-    authenticated_multiplier: float = 2.0  # Authenticated users get 2x limits
-    anonymous_daily_limit: int = 50  # Stricter limit for anonymous users
+    authenticated_multiplier: float = 2.0
+    anonymous_daily_limit: int = 50
 
 class RateLimitStorage:
-    """Storage backend for rate limiting data"""
-    
     def __init__(self, redis_url: Optional[str] = None):
         self.redis_client = None
         self.in_memory_storage = {}
@@ -140,19 +131,16 @@ class RateLimitStorage:
                 del self.in_memory_storage[key]
 
 class RateLimiter:
-    """Main rate limiter class"""
-    
     def __init__(self, config: RateLimitConfig, storage: RateLimitStorage):
         self.config = config
         self.storage = storage
-        self.active_requests = {}  # Track concurrent requests
+        self.active_requests = {}
         
         # Start cleanup task for in-memory storage
         if not storage.redis_client:
             asyncio.create_task(self._cleanup_task())
     
     async def _cleanup_task(self):
-        """Background task to cleanup expired entries"""
         while True:
             try:
                 await self.storage.cleanup_expired()
@@ -273,7 +261,6 @@ class RateLimiter:
 _rate_limiter: Optional[RateLimiter] = None
 
 def init_rate_limiter(redis_url: Optional[str] = None, config: Optional[RateLimitConfig] = None):
-    """Initialize the global rate limiter"""
     global _rate_limiter
     
     if config is None:
@@ -286,7 +273,6 @@ def init_rate_limiter(redis_url: Optional[str] = None, config: Optional[RateLimi
     return _rate_limiter
 
 def get_rate_limiter() -> RateLimiter:
-    """Get the global rate limiter instance"""
     if _rate_limiter is None:
         raise RuntimeError("Rate limiter not initialized. Call init_rate_limiter() first.")
     return _rate_limiter
@@ -298,7 +284,6 @@ async def apply_rate_limit(request: Request, user_data: Optional[dict] = None) -
         return await rate_limiter.check_rate_limit(request, user_data)
     except Exception as e:
         logger.error(f"Rate limiting error: {e}")
-        # Don't block requests if rate limiter fails
         return None
 
 def rate_limit_decorator(func):
@@ -328,10 +313,8 @@ def rate_limit_decorator(func):
         return await func(*args, **kwargs)
     return wrapper
 
-# Context manager for concurrent request tracking
 class ConcurrentRequestTracker:
     """Context manager for tracking concurrent requests"""
-    
     def __init__(self, client_id: str):
         self.client_id = client_id
         self.rate_limiter = get_rate_limiter()
