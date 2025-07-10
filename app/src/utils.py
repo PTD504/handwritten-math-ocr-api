@@ -23,4 +23,5 @@ def clean_latex_output(latex_str):
     latex_str = re.sub(r'\\begin\s+\{', r'\\begin{', latex_str)
     latex_str = re.sub(r'\\end\s+\{', r'\\end{', latex_str)
     latex_str = re.sub(r'\{(\s+)([a-zA-Z]+)(\s+)\}', r'{\2}', latex_str)
+    latex_str = re.sub(r'\\\s+\\', r'\\\\', latex_str)
     return latex_str
