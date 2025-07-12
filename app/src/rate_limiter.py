@@ -64,6 +64,10 @@ class RateLimitStorage:
                 logger.error(f"Redis get error: {e}")
                 return 0
         else:
+            # Clean up expired entries on read for in-memory to keep it simple
+            if key in self.in_memory_storage and time.time() > self.in_memory_storage[key].get('expires', 0):
+                del self.in_memory_storage[key]
+                return 0
             return self.in_memory_storage.get(key, {}).get('count', 0)
     
     async def increment(self, key: str, ttl: int) -> int:
@@ -80,11 +84,7 @@ class RateLimitStorage:
                 return 1
         else:
             current_time = time.time()
-            if key not in self.in_memory_storage:
-                self.in_memory_storage[key] = {'count': 0, 'expires': current_time + ttl}
-            
-            # Check if expired
-            if current_time > self.in_memory_storage[key]['expires']:
+            if key not in self.in_memory_storage or current_time > self.in_memory_storage[key]['expires']:
                 self.in_memory_storage[key] = {'count': 0, 'expires': current_time + ttl}
             
             self.in_memory_storage[key]['count'] += 1
@@ -123,11 +123,12 @@ class RateLimitStorage:
         """Clean up expired entries (for in-memory storage)"""
         if not self.redis_client:
             current_time = time.time()
-            expired_keys = [
+            # Clean up both rate limit keys and block keys
+            keys_to_delete = [
                 key for key, data in self.in_memory_storage.items()
                 if isinstance(data, dict) and data.get('expires', 0) < current_time
             ]
-            for key in expired_keys:
+            for key in keys_to_delete:
                 del self.in_memory_storage[key]
 
 class RateLimiter:
@@ -150,17 +151,20 @@ class RateLimiter:
                 await asyncio.sleep(60)
     
     def get_client_id(self, request: Request, user_data: Optional[dict] = None) -> Tuple[str, bool]:
-        """Get client identifier and whether user is authenticated"""
-        # Priority: User UID > IP + User-Agent hash
-        if user_data and user_data.get('uid'):
-            return f"user:{user_data['uid']}", not user_data.get('isAnonymous', True)
+        """
+        Get client identifier and whether user is authenticated.
+        For Model API, `user_data` can be a simplified dict indicating internal service.
+        """
+        # Check if user_data indicates an authenticated internal service call
+        if user_data and user_data.get('uid') == "internal_service" and user_data.get('isAnonymous') is False:
+            return f"service:{user_data['uid']}", True
         
-        # Fallback to IP + User-Agent
+        # Fallback to IP + User-Agent for anonymous/unrecognized calls
         client_ip = request.client.host if request.client else "unknown"
         user_agent = request.headers.get("user-agent", "unknown")
         client_hash = hashlib.md5(f"{client_ip}:{user_agent}".encode()).hexdigest()
-        return f"ip:{client_hash}", False
-    
+        return f"ip:{client_hash}", False # Treat as anonymous if not explicitly an internal service
+
     def get_rate_limits(self, is_authenticated: bool) -> Dict[str, int]:
         """Get rate limits based on user type"""
         base_limits = {
@@ -170,13 +174,13 @@ class RateLimiter:
         }
         
         if is_authenticated:
-            # Authenticated users get higher limits
+            # Authenticated users (now includes internal services) get higher limits
             return {
                 key: int(value * self.config.authenticated_multiplier)
                 for key, value in base_limits.items()
             }
         else:
-            # Anonymous users get stricter daily limits
+            # Anonymous users (including unknown external IPs) get stricter daily limits
             base_limits["requests_per_day"] = min(
                 base_limits["requests_per_day"],
                 self.config.anonymous_daily_limit
@@ -215,7 +219,7 @@ class RateLimiter:
             
             if count > limit:
                 # Check if this is burst traffic (potential abuse)
-                if count > limit * 2:  # 2x over limit = potential abuse
+                if count > limit * self.config.burst_threshold / self.config.requests_per_minute: # Dynamic burst threshold
                     await self.storage.set_block(client_id, self.config.block_duration)
                     logger.warning(f"Client blocked for abuse: {client_id}, count: {count}, limit: {limit}")
                 
@@ -299,16 +303,27 @@ def rate_limit_decorator(func):
                 request = arg
                 break
         
-        for key, value in kwargs.items():
-            if key == "request":
-                request = value
-            elif key == "current_user":
-                user_data = value
+        # For the Model API, user_data might be simple, e.g., {'uid': 'internal_service', 'isAnonymous': False}
+        # if an internal API key is used.
+        # We need to make sure this logic is aligned with how `main.py` is passing `user_data` to middleware.
+        
+        # For now, `rate_limit_middleware` handles `user_data`
+        # so this decorator might be less critical if middleware is always on.
+        
+        # Original: For decorator usage, it would look for current_user if passed
+        # for key, value in kwargs.items():
+        #     if key == "request":
+        #         request = value
+        #     elif key == "current_user": # This is what was used for Firebase in main.py
+        #         user_data = value 
         
         if request:
-            rate_limit_response = await apply_rate_limit(request, user_data)
-            if rate_limit_response:
-                return rate_limit_response
+            # We need to pass the "simulated" user_data (from API key check) to apply_rate_limit
+            # In the new main.py, the middleware `rate_limit_middleware` is already doing this,
+            # so the decorator might be redundant if all endpoints go through that middleware.
+            # If you want to use the decorator for specific endpoints *instead of* the middleware,
+            # you'd need to adapt how `user_data` is determined here.
+            pass # The middleware handles it.
         
         return await func(*args, **kwargs)
     return wrapper

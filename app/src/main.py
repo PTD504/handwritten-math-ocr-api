@@ -8,24 +8,17 @@ import io
 import os
 import time
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import base64
 from pathlib import Path
 
-# FIREBASE
-import json
-import firebase_admin
-from firebase_admin import credentials, auth
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 
-# RATE LIMITER 
+# RATE LIMITER
 from rate_limiter import (
-    init_rate_limiter, 
-    get_rate_limiter, 
+    init_rate_limiter,
+    get_rate_limiter,
     apply_rate_limit,
-    rate_limit_decorator,
-    ConcurrentRequestTracker,
     RateLimitConfig
 )
 
@@ -37,29 +30,26 @@ from im2latex import load_model, predict
 from utils import load_vocab
 from config import config
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FIREBASE ADMIN SDK
-firebase_admin_initialized = False
+API_KEY = os.getenv("MODEL_API_KEY")
+if not API_KEY:
+    logger.warning("MODEL_API_KEY environment variable not set. Model API will not require authentication.")
 
-firebase_service_account_json = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_JSON')
-
-if firebase_service_account_json:
-    try:
-        cred_dict = json.loads(firebase_service_account_json)
-        cred = credentials.Certificate(cred_dict)
-        firebase_admin.initialize_app(cred)
-        firebase_admin_initialized = True
-        logger.info("Firebase Admin SDK initialized from FIREBASE_SERVICE_ACCOUNT_KEY_JSON environment variable.")
-    except json.JSONDecodeError:
-        logger.error("Error: FIREBASE_SERVICE_ACCOUNT_KEY_JSON is not a valid JSON string. Check your .env or Cloud Run config.")
-    except Exception as e:
-        logger.error(f"Error initializing Firebase Admin SDK from FIREBASE_SERVICE_ACCOUNT_KEY_JSON: {e}")
-else:
-    logger.warning("Firebase Admin SDK not initialized. Authentication will not work.")
-    logger.warning("Please set FIREBASE_SERVICE_ACCOUNT_KEY_JSON in your .env file (local) or as an environment variable (Cloud Run).")
+def verify_internal_api_key(request: Request):
+    if not API_KEY:
+        return
+    auth_header = request.headers.get("X-API-Key") or request.headers.get("Authorization")
+    if not auth_header:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing API Key")
+    if auth_header.startswith("Bearer "):
+        provided_key = auth_header.split(" ")[1]
+    else:
+        provided_key = auth_header
+    if provided_key != API_KEY:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid API Key")
+    return True
 
 app = FastAPI(
     title=config.API_TITLE,
@@ -69,10 +59,9 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all origins for development; restrict in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,7 +74,6 @@ model = None
 model_load_time = None
 prediction_count = 0
 
-# Pydantic models
 class PredictionResponse(BaseModel):
     formula: str
     confidence: Optional[float] = None
@@ -104,7 +92,7 @@ class StatusResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     healthy: bool
-    checks: dict
+    checks: Dict[str, Any]
 
 class BatchPredictionRequest(BaseModel):
     images: List[str]
@@ -173,7 +161,7 @@ def update_prediction_count():
 async def startup_event():
     app.state.start_time = time.time()
     
-    # Initialize rate limiter
+    # Initialize rate limiter (KEEP)
     try:
         redis_url = os.getenv('REDIS_URL')
         rate_limit_config = RateLimitConfig(
@@ -181,7 +169,7 @@ async def startup_event():
             requests_per_hour=int(os.getenv('RATE_LIMIT_PER_HOUR', '100')),
             requests_per_day=int(os.getenv('RATE_LIMIT_PER_DAY', '500')),
             concurrent_requests=int(os.getenv('CONCURRENT_REQUESTS', '5')),
-            authenticated_multiplier=float(os.getenv('AUTH_MULTIPLIER', '2.0')),
+            authenticated_multiplier=float(os.getenv('AUTH_MULTIPLIER', '2.0')), # This multiplier will now apply to different API keys or default
             anonymous_daily_limit=int(os.getenv('ANON_DAILY_LIMIT', '50')),
             block_duration=int(os.getenv('BLOCK_DURATION', '300'))
         )
@@ -196,7 +184,7 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize model on startup: {e}. API may not function correctly.")
 
-# Middleware to apply rate limiting globally
+# Middleware to apply rate limiting globally (Modify user_data logic)
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     # Skip rate limiting for health checks and static endpoints
@@ -204,18 +192,16 @@ async def rate_limit_middleware(request: Request, call_next):
     if request.url.path in skip_paths:
         return await call_next(request)
     
-    # Check if we have authorization header to determine user type
-    user_data = None
-    auth_header = request.headers.get("authorization")
-    
-    if auth_header and auth_header.startswith("Bearer ") and firebase_admin_initialized:
-        try:
-            token = auth_header.split(" ")[1]
-            decoded_token = auth.verify_id_token(token)
-            user_data = decoded_token
-        except Exception:
-            # If token verification fails, treat as anonymous user
-            user_data = None
+    # Determine user type for rate limiting. In Model API, this might be simplified
+    # to "authenticated" if an API Key is present, or "anonymous" otherwise.
+    user_data = {"is_authenticated": False} # Default to anonymous
+    if API_KEY: # Only check for API key if one is configured
+        auth_header = request.headers.get("X-API-Key") or request.headers.get("Authorization")
+        if auth_header:
+            provided_key = auth_header.split(" ")[1] if auth_header.startswith("Bearer ") else auth_header
+            if provided_key == API_KEY:
+                user_data["is_authenticated"] = True
+                user_data["uid"] = "internal_service" # A dummy UID for authenticated status
     
     # Apply rate limiting
     try:
@@ -243,85 +229,39 @@ async def root():
     </html>
     """
 
-# User authentication dependency
-security = HTTPBearer()
-
-async def get_current_firebase_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """
-    Verify Firebase ID Token from the Authorization Bearer header.
-    Return decoded user information if the token is valid.
-    """
-    if not firebase_admin_initialized:
-        logger.error("Attempted token verification when Firebase Admin SDK was not initialized.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Server is not ready to verify authentication tokens. Please try again later."
-        )
-    
-    try:
-        token = credentials.credentials
-        
-        # Verify Firebase ID Token
-        decoded_token = auth.verify_id_token(token)
-        logger.info(f"Firebase ID Token verified for user UID: {decoded_token.get('uid')}, Email: {decoded_token.get('email')}")
-        return decoded_token
-        
-    except Exception as e:
-        logger.error(f"Firebase ID Token verification failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication credentials: {e}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-@app.post("/verify-firebase-login")
-async def verify_firebase_login_endpoint(request: Request, token_data: dict):
-    """
-    Verify Firebase ID Token received directly from the frontend.
-    """
-    id_token = token_data.get("token")
-    if not id_token:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Firebase ID Token is missing")
-    
-    if not firebase_admin_initialized:
-        logger.error("Attempted /verify-firebase-login when Firebase Admin SDK was not initialized.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Server is not ready to verify authentication tokens. Please try again later."
-        )
-    
-    try:
-        decoded_token = auth.verify_id_token(id_token)
-        logger.info(f"Backend Firebase ID Token verification successful for user: {decoded_token.get('email') or decoded_token.get('uid')}")
-        return {"message": "Firebase ID Token verified successfully", "user_uid": decoded_token['uid'], "email": decoded_token.get('email')}
-    except Exception as e:
-        logger.error(f"Firebase ID Token verification failed on /verify-firebase-login: {e}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Firebase ID Token verification failed: {e}")
-
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_formula(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Image file containing a mathematical formula."),
-    current_user: dict = Depends(get_current_firebase_user)
+    # current_user: dict = Depends(get_current_firebase_user) # REMOVE Firebase dependency
+    auth_check: bool = Depends(verify_internal_api_key) # NEW: Add internal API Key dependency
 ):
     """
     Predicts the LaTeX formula from an uploaded image.
-    Requires a valid Firebase ID Token in the Authorization header.
-    Rate limiting is applied based on user authentication status.
+    Requires a valid internal API Key in the Authorization or X-API-Key header.
+    Rate limiting is applied.
     """
     global prediction_count
     start_time = time.time()
 
-    user_identifier = current_user.get('email') or current_user.get('uid') or "Unknown User"
-    logger.info(f"Prediction request from user: {user_identifier}, Provider: {current_user.get('firebase', {}).get('sign_in_provider')}")
+    # user_identifier = current_user.get('email') or current_user.get('uid') or "Unknown User" # REMOVE
+    user_identifier = "Internal Service" # For logging, since it's an internal call
+    logger.info(f"Prediction request from: {user_identifier}")
 
     # Get rate limiter and client ID for concurrent request tracking
     try:
         rate_limiter = get_rate_limiter()
-        client_id, is_authenticated = rate_limiter.get_client_id(request, current_user)
+        # Modify get_client_id to reflect internal service usage, potentially using a client_id based on API Key or IP
+        # For this context, we can simulate an authenticated internal user for rate limiting purposes.
+        # It's crucial that `rate_limiter.py` also understands this new `user_data` structure.
+        client_id, is_authenticated = rate_limiter.get_client_id(request, {"uid": "internal_service", "isAnonymous": False})
         
         # Use concurrent request tracker
+        # Original: async with ConcurrentRequestTracker(client_id):
+        # The ConcurrentRequestTracker can stay, but ensure its client_id generation is robust
+        # for internal calls. Let's assume it works based on `request` and simplified `user_data`.
+        from rate_limiter import ConcurrentRequestTracker # Re-import or ensure it's available
         async with ConcurrentRequestTracker(client_id):
             
             if model is None:
@@ -368,7 +308,7 @@ async def predict_formula(
     
     except HTTPException as e:
         if e.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
-            logger.warning(f"Concurrent request limit exceeded for user {user_identifier}")
+            logger.warning(f"Concurrent request limit exceeded for {user_identifier}")
         raise
 
 @app.post("/predict/batch")
@@ -376,25 +316,26 @@ async def predict_batch(
     request: Request,
     batch_request: BatchPredictionRequest,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(get_current_firebase_user)
+    auth_check: bool = Depends(verify_internal_api_key) # NEW: Add internal API Key dependency
 ):
     """
     Predicts LaTeX formulas from multiple base64 encoded images.
-    Requires a valid Firebase ID Token in the Authorization header.
-    Rate limiting is applied based on user authentication status.
+    Requires a valid internal API Key in the Authorization or X-API-Key header.
+    Rate limiting is applied.
     """
     start_time = time.time()
     results = []
     
-    user_identifier = current_user.get('email') or current_user.get('uid') or "Unknown User"
-    logger.info(f"Batch prediction request from user: {user_identifier}, {len(batch_request.images)} images.")
+    user_identifier = "Internal Service" # For logging
+    logger.info(f"Batch prediction request from: {user_identifier}, {len(batch_request.images)} images.")
 
     # Get rate limiter and client ID for concurrent request tracking
     try:
         rate_limiter = get_rate_limiter()
-        client_id, is_authenticated = rate_limiter.get_client_id(request, current_user)
+        client_id, is_authenticated = rate_limiter.get_client_id(request, {"uid": "internal_service", "isAnonymous": False})
         
         # Use concurrent request tracker
+        from rate_limiter import ConcurrentRequestTracker # Re-import or ensure it's available
         async with ConcurrentRequestTracker(client_id):
             
             if model is None:
@@ -457,7 +398,7 @@ async def predict_batch(
     
     except HTTPException as e:
         if e.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
-            logger.warning(f"Concurrent request limit exceeded for user {user_identifier}")
+            logger.warning(f"Concurrent request limit exceeded for {user_identifier}")
         raise
 
 @app.get("/status", response_model=StatusResponse)
@@ -490,7 +431,7 @@ def health_check():
         "model_loaded": model is not None,
         "vocab_loaded": vocab is not None and idx2char is not None,
         "device_available": device is not None,
-        "firebase_admin_initialized": firebase_admin_initialized,
+        # "firebase_admin_initialized": firebase_admin_initialized, # REMOVE
         "rate_limiter_initialized": rate_limiter_healthy,
         "model_files_exist": {
             "model.pth": os.path.exists(os.path.join(config.model_dir, 'model.pth')),
@@ -498,11 +439,12 @@ def health_check():
         }
     }
     
+    # Adjust health check logic since firebase is removed
     healthy = all([
         checks["model_loaded"],
         checks["vocab_loaded"],
         checks["device_available"],
-        checks["firebase_admin_initialized"],
+        # checks["firebase_admin_initialized"], # REMOVE
         checks["rate_limiter_initialized"],
         all(checks["model_files_exist"].values())
     ])
@@ -510,13 +452,24 @@ def health_check():
     return HealthResponse(healthy=healthy, checks=checks)
 
 @app.get("/rate-limit/status")
-async def get_rate_limit_status(request: Request, current_user: dict = Depends(get_current_firebase_user)):
+async def get_rate_limit_status(request: Request): # REMOVE current_user dependency
     """
-    Get current rate limit status for the authenticated user
+    Get current rate limit status for the calling client (API Key or IP).
     """
     try:
         rate_limiter = get_rate_limiter()
-        client_id, is_authenticated = rate_limiter.get_client_id(request, current_user)
+        # Simulate user data for get_client_id. This endpoint itself might not need API key.
+        # If you want this endpoint to also be protected by API_KEY, add Depends(verify_internal_api_key)
+        user_data_for_client_id = {"uid": "internal_service", "isAnonymous": False} if API_KEY else None
+        client_id, is_authenticated = rate_limiter.get_client_id(request, user_data_for_client_id)
+        
+        # If API_KEY is set, we treat it as authenticated for rate limiting purposes.
+        if API_KEY and client_id == f"user:internal_service":
+             is_authenticated = True
+        else:
+             is_authenticated = False
+
+
         limits = rate_limiter.get_rate_limits(is_authenticated)
         
         # Get current usage (this is a simplified version)
