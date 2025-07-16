@@ -3,7 +3,9 @@ import time
 import logging
 from typing import Dict, Any
 from pathlib import Path
+import psutil
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 
 # FastAPI imports
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Depends, status, Request
@@ -37,7 +39,18 @@ from rate_limiter import (
 )
 
 # Pydantic models for API requests and responses
-from models import PredictionRequest, PredictionResponse, BatchPredictionRequest, BatchPredictionResponse, StatusResponse, HealthResponse, ErrorResponse
+from models import (
+    PredictionRequest, 
+    PredictionResponse, 
+    BatchPredictionRequest, 
+    BatchPredictionResponse, 
+    StatusResponse, 
+    HealthResponse, 
+    ErrorResponse
+)
+
+# Load environment variables
+load_dotenv()
 
 # LOGGING CONFIGURATION
 
@@ -634,6 +647,113 @@ async def health_check():
         checks=checks,
         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
     )
+
+@app.get("/model/info")
+def get_model_info():
+    if model is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model not loaded")
+    
+    return {
+        "model_config": {
+            "img_height": config.IMG_H,
+            "img_width": config.IMG_W,
+            "d_model": config.D_MODEL,
+            "num_heads": config.NHEAD,
+            "num_decoder_layers": config.NUM_DECODER_LAYERS,
+            "dim_feedforward": config.DIM_FEEDFORWARD,
+            "dropout": config.DROPOUT,
+            "max_seq_len": config.MAX_SEQ_LEN
+        },
+        "vocab_info": {
+            "vocab_size": len(vocab) if vocab else 0,
+            "special_tokens": config.SPECIAL_TOKENS
+        },
+        "device": str(device),
+        "model_parameters": sum(p.numel() for p in model.parameters()) if model else 0
+    }
+
+@app.get("/metrics")
+def get_metrics():
+    uptime_seconds = time.time() - (app.state.start_time if hasattr(app.state, 'start_time') else time.time())
+    # Get rate limiter metrics
+    rate_limiter_metrics = {}
+    try:
+        rate_limiter = get_rate_limiter()
+        rate_limiter_metrics = {
+            "active_concurrent_requests": len(rate_limiter.active_requests),
+            "total_concurrent_requests": sum(rate_limiter.active_requests.values()),
+            "max_concurrent_per_client": rate_limiter.config.concurrent_requests
+        }
+    except Exception:
+        rate_limiter_metrics = {"error": "Rate limiter not available"}
+
+    return {
+        "predictions": {
+            "total": prediction_count,
+            "rate_per_second": prediction_count / uptime_seconds if uptime_seconds > 0 else 0
+        },
+        "system": {
+            "cpu_percent": psutil.cpu_percent(),
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_percent": psutil.disk_usage('/').percent
+        },
+        "rate_limiter": rate_limiter_metrics,
+        "uptime_seconds": uptime_seconds
+    }
+
+@app.get("/rate-limit/status")
+async def get_rate_limit_status(request: Request):
+    """
+    Get current rate limit status for the calling client (API Key or IP).
+    """
+    try:
+        rate_limiter = get_rate_limiter()
+        user_data_for_client_id = {"uid": "internal_service", "isAnonymous": False} if app_config.api_key else None
+        client_id, is_authenticated = rate_limiter.get_client_id(request, user_data_for_client_id)
+        
+        # If API_KEY is set, we treat it as authenticated for rate limiting purposes.
+        if app_config.api_key and client_id == f"user:internal_service":
+             is_authenticated = True
+        else:
+             is_authenticated = False
+
+
+        limits = rate_limiter.get_rate_limits(is_authenticated)
+        
+        # Get current usage
+        current_time = int(time.time())
+        minute_key = f"{client_id}:minute:{current_time // 60}"
+        hour_key = f"{client_id}:hour:{current_time // 3600}"
+        day_key = f"{client_id}:day:{current_time // 86400}"
+        
+        current_minute = await rate_limiter.storage.get_count(minute_key)
+        current_hour = await rate_limiter.storage.get_count(hour_key)
+        current_day = await rate_limiter.storage.get_count(day_key)
+        
+        return {
+            "client_id": client_id,
+            "is_authenticated": is_authenticated,
+            "limits": limits,
+            "current_usage": {
+                "minute": current_minute,
+                "hour": current_hour,
+                "day": current_day
+            },
+            "remaining": {
+                "minute": max(0, limits["requests_per_minute"] - current_minute),
+                "hour": max(0, limits["requests_per_hour"] - current_hour),
+                "day": max(0, limits["requests_per_day"] - current_day)
+            },
+            "concurrent_requests": rate_limiter.active_requests.get(client_id, 0),
+            "max_concurrent": rate_limiter.config.concurrent_requests
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting rate limit status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error retrieving rate limit status"
+        )
 
 # DEVELOPMENT SERVER
 

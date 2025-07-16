@@ -1,137 +1,328 @@
-# Handwritten Math OCR API
+# 🧠 Handwritten Math OCR API
 
-This repository provides a complete solution for converting images of handwritten mathematical equations into LaTeX format. It includes a high-performance REST API for inference and a full suite of scripts for training your own models.
+**A complete end-to-end solution for recognizing handwritten mathematical formulas and converting them to LaTeX code. This project demonstrates not only advanced machine learning model development but also production-ready API deployment with modern DevOps practices.**
 
-The core of the project is a deep learning model built with PyTorch, featuring a Swin Transformer encoder and a Transformer decoder, designed for high accuracy in formula recognition. The API is built with FastAPI and is fully containerized with Docker for easy deployment and scalability.
+<div align="center">
+  <img src="https://img.shields.io/badge/Framework-FastAPI-009688.svg?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Model-SwinTransformer-2196F3.svg?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Container-Docker-2496ED.svg?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Cloud-GCP-4285F4.svg?style=for-the-badge" />
+</div>
 
-## Model Architecture
+---
 
-The model uses an encoder-decoder architecture optimized for image-to-sequence tasks:
+## 🎯 Project Overview
 
-*   **Encoder:** A **Swin Transformer (Tiny)**, pre-trained on ImageNet, is adapted to process single-channel (grayscale) formula images. It extracts robust hierarchical features from the input image.
-*   **Decoder:** A standard **Transformer Decoder** generates the corresponding LaTeX sequence token by token, attending to the features extracted by the encoder.
+This project showcases a **complete machine learning pipeline** from research to production deployment:
 
-## API Endpoints
+- **🔬 Advanced Model Development**: Swin Transformer + Transformer Decoder architecture with custom training optimizations
+- **🏗️ Production-Ready API**: FastAPI with authentication, rate limiting, monitoring, and health checks
+- **📦 Containerized Deployment**: Docker and Docker Compose for consistent deployments
+- **☁️ Cloud Infrastructure**: Deployed on Google Cloud Platform with auto-scaling capabilities
+- **📊 MLOps Integration**: MLflow for experiment tracking and model versioning
+- **🔒 Enterprise Features**: API key authentication, Redis-based rate limiting, comprehensive logging
 
-The service exposes several RESTful endpoints for prediction, monitoring, and diagnostics.
+This demonstrates not just ML model building skills, but also **full-stack development**, **DevOps practices**, and **production system design**.
 
-| Endpoint           | Method | Description                                                                         |
-|--------------------|--------|-------------------------------------------------------------------------------------|
-| `/predict`         | `POST` | Upload an image file (`.png`, `.jpg`, etc.) to receive its LaTeX representation.    |
-| `/predict/batch`   | `POST` | Send a list of base64-encoded image strings for batch processing.                   |
-| `/status`          | `GET`  | Get the operational status of the API, including model and vocabulary load status.  |
-| `/health`          | `GET`  | Perform a detailed health check of the service and its components.                  |
-| `/model/info`      | `GET`  | Retrieve the configuration and parameters of the loaded model.                      |
+---
 
-## Getting Started: Running the API
+## 🚀 Key Features & Technical Highlights
 
-You can quickly get the API running locally using Docker.
+### 🤖 **Advanced Machine Learning**
+- **Swin Transformer Encoder**: State-of-the-art vision transformer for image feature extraction
+- **Custom Transformer Decoder**: Specialized architecture for sequential LaTeX generation
+- **Optimized Training Pipeline**: Label smoothing, learning rate scheduling, mixed precision training
+- **MLflow Integration**: Comprehensive experiment tracking and model versioning
 
-### Prerequisites
+### 🏗️ **Production-Ready Architecture**
+- **FastAPI Framework**: High-performance async API with automatic OpenAPI documentation
+- **Enterprise Security**: API key authentication, request validation, CORS handling
+- **Advanced Rate Limiting**: Redis-based multi-tier limiting (per minute/hour/day)
+- **Comprehensive Monitoring**: Health checks, metrics collection, system monitoring
+- **Batch Processing**: Optimized batch prediction endpoints for high throughput
 
-*   Git
-*   Docker and Docker Compose
+### 📦 **DevOps & Deployment**
+- **Containerization**: Docker multi-stage builds for optimized image sizes
+- **Cloud Deployment**: Google Cloud Platform with load balancing and auto-scaling
+- **CI/CD Ready**: Structured for automated testing and deployment pipelines
+- **Production Monitoring**: Comprehensive logging, error tracking, and performance metrics
 
-### 1. Clone the Repository
+---
+
+## **Dataset**
+
+- This project utilizes the [MathWriting Dataset](https://arxiv.org/pdf/2404.10690), which contains online handwritten mathematical expressions in the `InkML` format. The dataset is split into `train`, `valid`, `test`, `synthetic`, and `symbols` sets, with the `train` and `synthetic` portions used for model training. Each InkML file provides raw stroke data with spatial and time information, and the corresponding ground truth is given as a normalized LaTeX string in the `normalizedLabel` field.
+
+- Since the Swin Transformer encoder requires image input, the InkML stroke data must be converted into a rasterized image format, such as `PNG`, before training. This process involves rendering the raw strokes onto a digital canvas. The dataset is licensed under the [CC BY-NC-SA 4.0 license](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+## 📐 Model Architecture
+
+<div align="center">
+  <img src="images/model-architecture.png" alt="Model Architecture" width="700"/>
+</div>
+
+
+```
+Input Image (H×W×1) → Swin Transformer Encoder → Feature Maps → Transformer Decoder → LaTeX Tokens
+```
+
+### **Technical Specifications**
+- **Encoder**: Swin Transformer (Tiny) - 28M parameters, modified for single-channel input
+- **Decoder**: 8-layer Transformer with multi-head attention (8 heads, 512 dimensions)
+- **Training Optimizations**:
+  - Sinusoidal positional encoding
+  - Label smoothing (α=0.1)
+  - AdamW optimizer with cosine annealing
+  - Mixed precision training (FP16)
+  - Gradient clipping and accumulation
+
+### **Performance Metrics**
+- **Accuracy**: 47.4% exact match on test set
+- **CER (Character Error Rate)**: 0.0615 on test set
+- **Inference Speed**: ~350ms per image on CPU, ~150ms on GPU
+- **Model Size**: 143MB
+- **Total Params**: 37.45M
+
+### **MLflow Tracking**
+- **General Information**
+<div align="center">
+  <img src="images/mlflow-swin.png" alt="Model Architecture" width="700"/>
+</div>
+
+- **Model metrics on validation data during the training process**
+<div align="center">
+  <img src="images/metrics.png" alt="Model Architecture" width="700"/>
+</div>
+
+---
+
+## 🔧 API Endpoints & Documentation
+
+<div align="center">
+  <img src="images/api.png" alt="API Documentation" width="600"/>
+</div>
+
+### **Endpoints Details**
+
+| Endpoint | Method | Description | Auth Required |
+|----------|--------|-------------|---------------|
+| `/predict` | POST | Single image prediction | ✅ |
+| `/predict/batch` | POST | Batch prediction (up to 10 images) | ✅ |
+| `/status` | GET | API health and statistics | ❌ |
+| `/health` | GET | Comprehensive health check | ❌ |
+| `/model/info` | GET | Model architecture details | ❌ |
+| `/metrics` | GET | System performance metrics | ❌ |
+| `/rate-limit/status` | GET | Current rate limit status | ❌ |
+
+### **Advanced Features**
+- **Concurrent Request Handling**: Up to 5 concurrent requests per client
+- **Request Validation**: Comprehensive input validation and sanitization
+- **Response Caching**: Redis-based caching for improved performance
+
+---
+
+## 🌐 Cloud Deployment (GCP)
+### **Infrastructure Components**
+- **Google Cloud Run**: Serverless container deployment with auto-scaling
+- **Google Cloud Build**: Automated image building and pushing to Container Registry
+- **Redis Memorystore**: Rate limiting and caching layer
+- **Cloud Logging**: Centralized logging and monitoring
+- **Cloud Monitoring**: Performance metrics and alerting
+
+### **Deployment Features**
+- **Auto-scaling**: 0-100 instances based on demand
+- **Health Checks**: Kubernetes-style liveness and readiness probes
+- **SSL/TLS**: Automatic certificate management
+
+---
+
+## 🚀 Quick Start Guide
+
+### **1. Local Development**
 
 ```bash
+# Clone the repository
 git clone https://github.com/ptd504/handwritten-math-ocr-api.git
 cd handwritten-math-ocr-api
+
+# Prepare your model, vocab files
+# Edit .env with your configuration
+
+# Run with Docker Compose
+docker-compose -f app/docker-compose.yml up --build
 ```
 
-### 2. Place Model Files
+### **2. API Usage Examples**
 
-The API requires a trained model and a vocabulary file to function.
-
-1.  Train your own model by following the [Training](#training) instructions below.
-2.  Once training is complete, a `best_model.pth` and `vocab.json` will be saved in the `checkpoints/` directory.
-3.  Copy these files into the `app/trained-model/` directory. Rename `best_model.pth` to `model.pth`.
-
-Your `app/trained-model/` directory should look like this:
-
-```
-app/trained-model/
-├── model.pth
-└── vocab.json
-```
-
-### 3. Run with Docker Compose
-
-With the model files in place, start the service using Docker Compose.
-
+#### **Single Image Prediction**
 ```bash
-docker-compose --file app/docker-compose.yml up --build
+curl -X POST "http://localhost:8000/predict" \
+  -H "X-API-Key: your_api_key" \
+  -F "file=@formula_image.png"
 ```
 
-The API will be available at `http://localhost:8000`. You can view the interactive documentation at `http://localhost:8000/docs`.
-
-### 4. Make a Prediction
-
-Use `curl` or any HTTP client to send an image to the `/predict` endpoint.
-
+#### **Batch Prediction**
 ```bash
-curl -X POST -F "file=@/path/to/your/formula.png" http://localhost:8000/predict
+curl -X POST "http://localhost:8000/predict/batch" \
+  -H "X-API-Key: your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "images": ["base64_image_1", "base64_image_2"]
+  }'
 ```
 
-The response will be a JSON object containing the predicted LaTeX formula:
-
+#### **Response Format**
 ```json
 {
-  "formula": "\\frac { d } { d x } e ^ { x } = e ^ { x }",
-  "confidence": 0.9876,
+  "formula": "\\int_{0}^{\\infty} x^2 e^{-x} dx = 2",
+  "confidence": 0.9821,
   "processing_time": 0.543,
-  "timestamp": "2023-10-27 10:30:00"
+  "timestamp": "2025-07-15 21:00:03"
 }
 ```
 
-## Training
+---
 
-If you wish to train the model on your own dataset, you can use the provided training scripts.
+## 🏋️ Model Training Process (If you want to train your own model)
 
-### 1. Setup Environment
-
-Install the required Python packages from the root `requirements.txt` file.
-
+### **1. Data Preparation**
 ```bash
-pip install -r requirements.txt
-```
+# Prepare your dataset according to the instruction at README file (data/README.md)
 
-### 2. Prepare the Data
-
-Organize your dataset according to the structure described in `data/README.md`. This typically involves creating directories for images (`train_formulas`, `validate_formulas`) and corresponding CSV files (`train_labels.csv`, `validate_labels.csv`) with image filenames and their LaTeX labels.
-
-### 3. Build the Vocabulary
-
-Generate a `vocab.json` file from your training labels. This file maps each unique token in your dataset to an index.
-
-```bash
+# Build vocabulary
 python src/build_vocab.py
 ```
 
-This will create `vocab.json` inside the `checkpoints/` directory.
-
-### 4. Start Training
-
-Run the training script. You can choose between a standard training loop or one integrated with MLflow for experiment tracking.
-
-**Standard Training:**
-
+### **2. Training with MLflow (Optional)**
 ```bash
-python src/train.py
-```
+# If you don't want to use MLflow, just use train.py
+# python src/train.py 
 
-**Training with MLflow:**
+# Start MLflow server (In case you use MLflow during training process)
+mlflow ui --host 0.0.0.0 --port 5000
 
-```bash
+# Train model with experiment tracking
 python src/train_mlflow.py
 ```
 
-The script will train the model, validate it at the end of each epoch, and save checkpoints. The model with the best validation performance will be saved as `best_model.pth` in the `checkpoints/` directory.
+### **3. Model Evaluation**
+```bash
+# Evaluate model performance (see result in src/results)
+python src/test_model.py
+```
 
-### 5. Use the Trained Model
+## 🔒 Security & Rate Limiting
 
-After training is complete, copy the `best_model.pth` (renamed to `model.pth`) and `vocab.json` from the `checkpoints/` directory to the `app/trained-model/` directory to use them with the API.
+### **Authentication**
+- **API Key**: Secure token-based authentication
+- **Request Validation**: Comprehensive input sanitization
+- **CORS Configuration**: Secure cross-origin resource sharing
 
-## License
+### **Rate Limiting**
+```yaml
+Rate Limits:
+  - Per Minute: 10 requests
+  - Per Hour: 100 requests  
+  - Per Day: 500 requests
+  - Concurrent: 5 requests
+  - Auth Multiplier: 2x for authenticated users
+```
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+### **Security Features**
+- **Input Validation**: File type and size restrictions
+- **Error Handling**: Secure error messages without information leakage
+- **Logging**: Comprehensive audit trail
+- **DDoS Protection**: Built-in rate limiting and request throttling
+
+---
+
+## 📁 Project Structure
+
+```
+handwritten-math-ocr-api/
+├── app/                         # FastAPI application
+│   ├── main.py                  # API server implementation
+│   ├── rate_limiter.py          # Rate limiting logic
+│   ├── preprocess.py            # Image preprocessing
+│   ├── im2latex.py              # Model inference
+│   ├── config.py                # Configuration management
+│   ├── docker-compose.yml       # Local deployment
+│   └── trained-model/           # Model artifacts
+│   └── Dockerfile               # Container configuration
+│   └── deploy.sh                # Script to automate model deployment
+│   └── monitoring-setup.sh      # Cloud Run monitoring alert setup
+│   └── requirements.txt         # For FastAPI application and GCP (Deployment)
+├── src/                         # Training pipeline
+│   ├── train.py                 # Standard training script
+│   ├── train_mlflow.py          # MLflow integrated training
+│   ├── model_swin.py            # Model architecture (Encoder: Swin Transformer)
+│   ├── model_res18trans.py      # Model architecture (Encoder: ResNet18 + Transformer Encoder)
+│   ├── model.py                 # Model architecture (Encoder: ResNet18)
+│   ├── dataset.py               # Data loading utilities
+│   ├── test_model.py            # Model evaluation
+│   └── build_vocab.py           # Vocabulary building
+│   └── main.py                  # Pipeline for training (from build vocab to train model)
+├── data/                        # Dataset management
+│   ├── train_formulas/          # Train data
+│   ├── validate_formulas/       # Validate data
+│   ├── test_formulas/           # Test data
+│   ├── labels                   # (.csv) Label files, including (train, validate and test)
+│   └── README.md                # Data preparation guide
+├── checkpoints/                 # Model checkpoints
+└── requirements.txt             # Python dependencies
+```
+
+---
+
+## 🌟 Future Enhancements
+
+### **Technical Roadmap**
+- [ ] **Model Improvements**: Implement attention visualization and model explainability
+- [ ] **Performance**: GPU acceleration and model quantization
+- [ ] **Features**: Support for complex mathematical expressions and symbols
+- [ ] **Scalability**: Kubernetes deployment and horizontal scaling
+- [ ] **Monitoring**: Advanced APM integration and custom metrics
+
+### **Business Features**
+- [ ] **Multi-language**: Support for multiple mathematical notation systems
+- [ ] **Integration**: REST API SDK for popular programming languages
+- [ ] **Dashboard**: Web-based management interface
+- [ ] **Analytics**: Usage analytics and prediction insights
+
+---
+
+## 🧑‍💻 About the Developer
+
+**Phan Thanh Đăng**  
+*Final-year Computer Science Student*  
+*VNU-HCM University of Information Technology*
+
+### **Technical Skills Demonstrated**
+- **Machine Learning**: PyTorch, Transformers, Computer Vision
+- **Backend Development**: FastAPI, Redis
+- **DevOps**: Docker, GCP
+- **Security**: API Authentication, Rate Limiting, Input Validation
+
+---
+
+## 📞 Contact & Links
+
+- **Email**: thanhdangphan1510@gmail.com
+- **GitHub**: [github.com/ptd504](https://github.com/ptd504)
+- **LinkedIn**: [linkedin.com/in/ptd504](https://linkedin.com/in/ptd504)
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+  <strong>⭐ If you find this project interesting, please consider giving it a star!</strong>
+</div>
+
+<div align="center">
+  <sub>Built with ❤️ for demonstrating production-ready ML system development</sub>
+</div>
