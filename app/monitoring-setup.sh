@@ -1,6 +1,6 @@
 PROJECT_ID="your-project-id"
-SERVICE_NAME="latex-ocr-api"
-REGION="us-central1"
+SERVICE_NAME="service-name"
+REGION="asia-southeast1"
 
 # Create alerting policy cho errors
 gcloud alpha monitoring policies create --policy-from-file=- <<EOF
