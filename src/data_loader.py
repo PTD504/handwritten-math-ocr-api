@@ -7,6 +7,7 @@ import numpy as np
 import re
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
+from utils import tokenize_latex
 from config import config
 
 class MathFormulaDataset(Dataset):
@@ -44,24 +45,6 @@ class MathFormulaDataset(Dataset):
             padded_ids += [self.vocab[config.pad_token]] * (config.max_seq_len - len(padded_ids))
 
         return img, torch.tensor(padded_ids), length
-
-def tokenize_latex(formula: str):
-    token_pattern = r'(\\[a-zA-Z]+|[{}_^$%&#]|[0-9]+|[a-zA-Z]+|[^\s])'
-    tokens = re.findall(token_pattern, formula)
-    return tokens
-
-def create_vocab(label_paths):
-    all_tokens = set()
-
-    for path in label_paths:
-        df = pd.read_csv(path)
-        for formula in df['latex_label'].dropna():
-            formula = formula.strip()
-            tokens = tokenize_latex(formula)
-            all_tokens.update(tokens)
-
-    vocab = {token: idx for idx, token in enumerate(config.special_tokens + sorted(all_tokens))}
-    return vocab
 
 def get_data_loaders(vocab):
     transform = transforms.Compose([

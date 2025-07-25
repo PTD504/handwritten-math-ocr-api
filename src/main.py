@@ -1,9 +1,9 @@
 import torch
 from tqdm import tqdm
-from data_loader import create_vocab, get_data_loaders
+from data_loader import get_data_loaders
 # from train_mlflow import train_model, load_and_continue_training
 from train import train_model, load_and_continue_training
-from utils import load_vocab
+from utils import create_vocab, save_vocab, load_vocab
 from inference import predict
 from tokenizer import Tokenizer
 import pandas as pd
@@ -13,6 +13,8 @@ def main():
     print(f"Using device: {device}")
     
     # Create vocab
+    # vocab = create_vocab([config.train_label_path])
+    # save_vocab(vocab)
     vocab, idx2char = load_vocab()
 
     tokenizer = Tokenizer(idx2char)

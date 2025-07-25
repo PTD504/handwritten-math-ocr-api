@@ -4,7 +4,6 @@ from config import config
 import torch.nn as nn
 import json
 from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
-from data_loader import create_vocab
 import numpy as np
 import editdistance
 
@@ -94,10 +93,23 @@ def init_weights(m):
             elif 'bias' in name:
                 nn.init.constant_(param.data, 0)
 
-def create_vocab_dicts():
-    vocab = create_vocab([config.train_label_path])
-    idx2char = {idx: char for char, idx in vocab.items()}
-    return vocab, idx2char
+def tokenize_latex(formula: str):
+    token_pattern = r'(\\[a-zA-Z]+|[{}_^$%&#]|[0-9]+|[a-zA-Z]+|[^\s])'
+    tokens = re.findall(token_pattern, formula)
+    return tokens
+
+def create_vocab(label_paths):
+    all_tokens = set()
+
+    for path in label_paths:
+        df = pd.read_csv(path)
+        for formula in df['latex_label'].dropna():
+            formula = formula.strip()
+            tokens = tokenize_latex(formula)
+            all_tokens.update(tokens)
+
+    vocab = {token: idx for idx, token in enumerate(config.special_tokens + sorted(all_tokens))}
+    return vocab
 
 def save_vocab(vocab, filename='vocab.json'):
     data = {
