@@ -193,17 +193,15 @@ curl -X POST "http://localhost:8000/predict/batch" \
 python src/build_vocab.py
 ```
 
-### **2. Training with MLflow (Optional)**
+### **2. Training (with MLflow - optional)**
 ```bash
-# If you don't want to use MLflow, just use train.py
-# python src/train.py 
-
 # Start MLflow server (In case you use MLflow during training process)
+# Use the train_model function from train_mlflow.py instead of train.py (You can modify this in main.py)
 mlflow ui --host 0.0.0.0 --port 5000
 
-# Train model with experiment tracking
-python src/train_mlflow.py
+python src/main.py
 ```
+**If you want to leverage Kaggle's training resources, run the `train-model-on-kaggle-tutorial.ipynb` notebook. After execution, the trained model will be available for download in the output section.**
 
 ### **3. Model Evaluation**
 ```bash
