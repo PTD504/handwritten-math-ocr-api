@@ -19,7 +19,7 @@ This project showcases a **complete machine learning pipeline** from research to
 - **🏗️ Production-Ready API**: FastAPI with authentication, rate limiting, monitoring, and health checks
 - **📦 Containerized Deployment**: Docker and Docker Compose for consistent deployments
 - **☁️ Cloud Infrastructure**: Deployed on Google Cloud Platform with auto-scaling capabilities
-- **📊 MLOps Integration**: MLflow for experiment tracking and model versioning
+- **📊 MLOps Integration**: Optional MLflow support for experiment tracking and model versioning
 - **🔒 Enterprise Features**: API key authentication, Redis-based rate limiting, comprehensive logging
 
 This demonstrates not just ML model building skills, but also **full-stack development**, **DevOps practices**, and **production system design**.
@@ -32,7 +32,7 @@ This demonstrates not just ML model building skills, but also **full-stack devel
 - **Swin Transformer Encoder**: State-of-the-art vision transformer for image feature extraction
 - **Custom Transformer Decoder**: Specialized architecture for sequential LaTeX generation
 - **Optimized Training Pipeline**: Label smoothing, learning rate scheduling, mixed precision training
-- **MLflow Integration**: Comprehensive experiment tracking and model versioning
+- **MLflow Integration**: Optional experiment tracking and model versioning (`train_mlflow.py`)
 
 ### 🏗️ **Production-Ready Architecture**
 - **FastAPI Framework**: High-performance async API with automatic OpenAPI documentation
@@ -70,11 +70,11 @@ Input Image (H×W×1) → Swin Transformer Encoder → Feature Maps → Transfor
 - **Encoder**: Swin Transformer (Tiny) - 28M parameters, modified for single-channel input
 - **Decoder**: 8-layer Transformer with multi-head attention (8 heads, 512 dimensions)
 - **Training Optimizations**:
-  - Sinusoidal positional encoding
+  - Learned positional encoding (`nn.Embedding`)
   - Label smoothing (α=0.1)
-  - AdamW optimizer with cosine annealing
+  - Adam optimizer with `ReduceLROnPlateau` learning rate scheduler
   - Mixed precision training (FP16)
-  - Gradient clipping and accumulation
+  - Gradient clipping (max norm = 1.0)
 
 ### **Performance Metrics**
 - **Accuracy**: 47.4% exact match on test set
@@ -115,9 +115,9 @@ Input Image (H×W×1) → Swin Transformer Encoder → Feature Maps → Transfor
 | `/rate-limit/status` | GET | Current rate limit status | ❌ |
 
 ### **Advanced Features**
-- **Concurrent Request Handling**: Up to 5 concurrent requests per client
+- **Concurrent Request Handling**: Up to 10 concurrent requests per client (configurable)
 - **Request Validation**: Comprehensive input validation and sanitization
-- **Response Caching**: Redis-based caching for improved performance
+- **Rate Limiting**: Redis-backed (with in-memory fallback) multi-tier rate limiting
 
 ---
 
@@ -125,7 +125,7 @@ Input Image (H×W×1) → Swin Transformer Encoder → Feature Maps → Transfor
 ### **Infrastructure Components**
 - **Google Cloud Run**: Serverless container deployment with auto-scaling
 - **Google Cloud Build**: Automated image building and pushing to Container Registry
-- **Redis Memorystore**: Rate limiting and caching layer
+- **Redis Memorystore**: Rate limiting layer (with automatic in-memory fallback)
 - **Cloud Logging**: Centralized logging and monitoring
 - **Cloud Monitoring**: Performance metrics and alerting
 
@@ -145,10 +145,15 @@ Input Image (H×W×1) → Swin Transformer Encoder → Feature Maps → Transfor
 git clone https://github.com/ptd504/handwritten-math-ocr-api.git
 cd handwritten-math-ocr-api
 
-# Prepare your model, vocab files
-# Edit .env with your configuration
+# Place your trained model (model.pth) and vocab file (vocab.json)
+# inside app/trained-model/
 
-# Run with Docker Compose
+# (Optional) Create app/.env with your configuration:
+#   MODEL_API_KEY=your_secret_key
+#   REDIS_URL=redis://localhost:6379
+#   ENVIRONMENT=development
+
+# Run with Docker Compose (app is served on http://localhost:8000)
 docker-compose -f app/docker-compose.yml up --build
 ```
 
@@ -156,28 +161,46 @@ docker-compose -f app/docker-compose.yml up --build
 
 #### **Single Image Prediction**
 ```bash
+# The container's internal port is 8080; docker-compose maps it to localhost:8000
 curl -X POST "http://localhost:8000/predict" \
   -H "X-API-Key: your_api_key" \
   -F "file=@formula_image.png"
 ```
 
+Accepted file formats: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tiff`, `.webp` (max 10 MB).
+
 #### **Batch Prediction**
 ```bash
+# Send a JSON body with a list of base64-encoded image strings (max 10 images)
 curl -X POST "http://localhost:8000/predict/batch" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
-    "images": ["base64_image_1", "base64_image_2"]
+    "images": ["<base64_image_1>", "<base64_image_2>"]
   }'
 ```
 
-#### **Response Format**
+#### **Single Prediction Response Format**
 ```json
 {
   "formula": "\\int_{0}^{\\infty} x^2 e^{-x} dx = 2",
   "confidence": 0.9821,
   "processing_time": 0.543,
   "timestamp": "2025-07-15 21:00:03"
+}
+```
+
+#### **Batch Prediction Response Format**
+```json
+{
+  "results": [
+    {"index": 0, "formula": "x^2 + y^2", "confidence": 0.95, "success": true},
+    {"index": 1, "formula": "", "confidence": null, "success": false, "error": "..."}
+  ],
+  "total_images": 2,
+  "successful_predictions": 1,
+  "processing_time": 1.02,
+  "timestamp": "2025-07-15 21:00:05"
 }
 ```
 
@@ -209,28 +232,56 @@ python src/main.py
 python src/test_model.py
 ```
 
+## ⚙️ Environment Variables
+
+All variables are read from the environment (or an `.env` file loaded via `python-dotenv`).
+
+| Variable | Default | Description |
+|---|---|---|
+| `MODEL_API_KEY` | *(none)* | Secret key required in `X-API-Key` header. If unset, auth is disabled. |
+| `ENVIRONMENT` | `production` | Set to `development` to enable `/docs`, `/redoc`, and relaxed CORS. |
+| `DEBUG` | `false` | Set to `true` to enable auto-reload and OpenAPI docs. |
+| `REDIS_URL` | *(none)* | Redis connection URL (e.g. `redis://localhost:6379`). Falls back to in-memory if unset. |
+| `CORS_ORIGINS` | *(none)* | Comma-separated list of allowed CORS origins. |
+| `TRUSTED_HOSTS` | *(none)* | Comma-separated list of trusted host headers. |
+| `RATE_LIMIT_PER_MINUTE` | `20` | Maximum requests per minute per client. |
+| `RATE_LIMIT_PER_HOUR` | `200` | Maximum requests per hour per client. |
+| `RATE_LIMIT_PER_DAY` | `1000` | Maximum requests per day per client. |
+| `CONCURRENT_REQUESTS` | `10` | Maximum concurrent in-flight requests per client. |
+| `AUTH_MULTIPLIER` | `3.0` | Rate-limit multiplier applied to authenticated clients. |
+| `ANON_DAILY_LIMIT` | `100` | Hard daily cap for unauthenticated clients. |
+| `BLOCK_DURATION` | `300` | Seconds to block a client after abuse is detected. |
+| `GOOGLE_CLOUD_PROJECT` | *(none)* | GCP project ID; enables Cloud Logging when set. |
+| `PORT` | `8080` | Port the uvicorn server listens on inside the container. |
+
+---
+
 ## 🔒 Security & Rate Limiting
 
 ### **Authentication**
-- **API Key**: Secure token-based authentication
-- **Request Validation**: Comprehensive input sanitization
-- **CORS Configuration**: Secure cross-origin resource sharing
+- **API Key**: Secure token-based authentication via the `X-API-Key` header (or `Authorization: Bearer <key>`)
+- **Request Validation**: Comprehensive input sanitization (file type, file size)
+- **CORS Configuration**: Configurable cross-origin resource sharing (defaults to no origins in production, localhost in development)
 
 ### **Rate Limiting**
 ```yaml
-Rate Limits:
-  - Per Minute: 10 requests
-  - Per Hour: 100 requests  
-  - Per Day: 500 requests
-  - Concurrent: 5 requests
-  - Auth Multiplier: 2x for authenticated users
+Default Rate Limits (configurable via environment variables):
+  - Per Minute:    20 requests  (RATE_LIMIT_PER_MINUTE)
+  - Per Hour:     200 requests  (RATE_LIMIT_PER_HOUR)
+  - Per Day:     1000 requests  (RATE_LIMIT_PER_DAY)
+  - Concurrent:    10 requests  (CONCURRENT_REQUESTS)
+  - Auth Multiplier: 3x for authenticated users  (AUTH_MULTIPLIER)
+  - Anonymous Daily Limit: 100  (ANON_DAILY_LIMIT)
+  - Block Duration: 300 seconds on abuse  (BLOCK_DURATION)
 ```
 
+Rate-limit state is stored in **Redis** when `REDIS_URL` is set; otherwise an **in-memory** fallback is used automatically.
+
 ### **Security Features**
-- **Input Validation**: File type and size restrictions
+- **Input Validation**: File type (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.tiff`, `.webp`) and size restrictions (max 10 MB)
 - **Error Handling**: Secure error messages without information leakage
 - **Logging**: Comprehensive audit trail
-- **DDoS Protection**: Built-in rate limiting and request throttling
+- **DDoS Protection**: Built-in rate limiting, request throttling, and automatic client blocking on abuse
 
 ---
 
@@ -239,35 +290,46 @@ Rate Limits:
 ```
 handwritten-math-ocr-api/
 ├── app/                         # FastAPI application
-│   ├── main.py                  # API server implementation
-│   ├── rate_limiter.py          # Rate limiting logic
-│   ├── preprocess.py            # Image preprocessing
-│   ├── im2latex.py              # Model inference
-│   ├── config.py                # Configuration management
-│   ├── docker-compose.yml       # Local deployment
-│   └── trained-model/           # Model artifacts
-│   └── Dockerfile               # Container configuration
-│   └── deploy.sh                # Script to automate model deployment
-│   └── monitoring-setup.sh      # Cloud Run monitoring alert setup
-│   └── requirements.txt         # For FastAPI application and GCP (Deployment)
+│   ├── src/                     # Python source files
+│   │   ├── main.py              # API server (routes, middleware, lifecycle)
+│   │   ├── rate_limiter.py      # Rate limiting logic (Redis + in-memory)
+│   │   ├── preprocess.py        # Image preprocessing (resize, normalize)
+│   │   ├── im2latex.py          # Model loading & autoregressive inference
+│   │   ├── model_swin.py        # Model architecture (Swin Transformer encoder)
+│   │   ├── models.py            # Pydantic request/response schemas
+│   │   ├── config.py            # Configuration constants
+│   │   └── utils.py             # LaTeX tokenization & vocab utilities
+│   ├── trained-model/           # Model artifacts (model.pth, vocab.json)
+│   ├── docker-compose.yml       # Local deployment (maps host:8000 → container:8080)
+│   ├── Dockerfile               # Multi-stage container build
+│   ├── deploy.sh                # Script to automate GCP Cloud Run deployment
+│   ├── monitoring-setup.sh      # Cloud Run monitoring alert setup
+│   └── requirements.txt         # Python dependencies for the API
 ├── src/                         # Training pipeline
-│   ├── train.py                 # Standard training script
-│   ├── train_mlflow.py          # MLflow integrated training
+│   ├── main.py                  # Pipeline entry point (vocab → train → evaluate)
+│   ├── train.py                 # Standard training script (Adam + ReduceLROnPlateau)
+│   ├── train_mlflow.py          # Optional MLflow-integrated training script
 │   ├── model_swin.py            # Model architecture (Encoder: Swin Transformer)
-│   ├── model_res18trans.py      # Model architecture (Encoder: ResNet18 + Transformer Encoder)
-│   ├── model.py                 # Model architecture (Encoder: ResNet18)
-│   ├── dataset.py               # Data loading utilities
-│   ├── test_model.py            # Model evaluation
-│   └── build_vocab.py           # Vocabulary building
-│   └── main.py                  # Pipeline for training (from build vocab to train model)
+│   ├── model_res18trans.py      # Model architecture (Encoder: ResNet18 + Transformer)
+│   ├── model.py                 # Model architecture (Encoder: ResNet18 only)
+│   ├── data_loader.py           # Data loading utilities
+│   ├── inference.py             # Batch inference / greedy decode helper
+│   ├── tokenizer.py             # Tokenizer wrapper
+│   ├── test_model.py            # Model evaluation (CER, BLEU, edit distance)
+│   ├── build_vocab.py           # Vocabulary building from training labels
+│   ├── config.py                # Training configuration
+│   └── utils.py                 # Metrics, checkpoint save/load, vocab I/O
 ├── data/                        # Dataset management
-│   ├── train_formulas/          # Train data
-│   ├── validate_formulas/       # Validate data
-│   ├── test_formulas/           # Test data
-│   ├── labels                   # (.csv) Label files, including (train, validate and test)
+│   ├── train_formulas/          # Training images (.png)
+│   ├── validate_formulas/       # Validation images (.png)
+│   ├── test_formulas/           # Test images (.png)
+│   ├── train_labels.csv         # Training labels (image_filename, latex_label)
+│   ├── validate_labels.csv      # Validation labels
+│   ├── test_labels.csv          # Test labels
 │   └── README.md                # Data preparation guide
-├── checkpoints/                 # Model checkpoints
-└── requirements.txt             # Python dependencies
+├── checkpoints/                 # Saved model checkpoints from training
+├── train-model-on-kaggle-tutorial.ipynb  # Kaggle training notebook
+└── requirements.txt             # Python dependencies for training pipeline
 ```
 
 ---
