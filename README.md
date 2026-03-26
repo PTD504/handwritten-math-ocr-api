@@ -49,11 +49,16 @@ This demonstrates not just ML model building skills, but also **full-stack devel
 
 ---
 
-## **Dataset**
+## 📊 Dataset & Data Processing
 
-- This project utilizes the [MathWriting Dataset](https://arxiv.org/pdf/2404.10690), which contains online handwritten mathematical expressions in the `InkML` format. The dataset is split into `train`, `valid`, `test`, `synthetic`, and `symbols` sets, with the `train` and `synthetic` portions used for model training. Each InkML file provides raw stroke data with spatial and time information, and the corresponding ground truth is given as a normalized LaTeX string in the `normalizedLabel` field.
+A significant engineering aspect of this project involves handling and transforming the [MathWriting Dataset](https://arxiv.org/pdf/2404.10690). The dataset is a comprehensive resource designed to advance research in handwritten mathematical expression recognition.
 
-- Since the Swin Transformer encoder requires image input, the InkML stroke data must be converted into a rasterized image format, such as `PNG`, before training. This process involves rendering the raw strokes onto a digital canvas. The dataset is licensed under the [CC BY-NC-SA 4.0 license](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+Originally published as part of a research paper, this dataset is provided in the `InkML` format, containing raw stroke data with spatial and time information. To utilize state-of-the-art vision models, a custom data pipeline was developed to render these raw strokes into rasterized PNG images. This conversion ensures broader compatibility with image-based analysis tools and establishes a standard Computer Vision training pipeline.
+
+**Data Scale & Splits:**
+- **Training Set:** ~220,000 images, offering a robust foundation for model development and feature extraction.
+- **Validation Set:** ~15,000 images, crucial for hyperparameter fine-tuning and preventing overfitting.
+- **Test Set:** ~7,000 images, providing a diverse and challenging array of handwritten expressions to assess the accuracy and generalizability of the recognition models.
 
 ## 📐 Model Architecture
 
@@ -118,21 +123,6 @@ Input Image (H×W×1) → Swin Transformer Encoder → Feature Maps → Transfor
 - **Concurrent Request Handling**: Up to 10 concurrent requests per client (configurable)
 - **Request Validation**: Comprehensive input validation and sanitization
 - **Rate Limiting**: Redis-backed (with in-memory fallback) multi-tier rate limiting
-
----
-
-## 🌐 Cloud Deployment (GCP)
-### **Infrastructure Components**
-- **Google Cloud Run**: Serverless container deployment with auto-scaling
-- **Google Cloud Build**: Automated image building and pushing to Container Registry
-- **Redis Memorystore**: Rate limiting layer (with automatic in-memory fallback)
-- **Cloud Logging**: Centralized logging and monitoring
-- **Cloud Monitoring**: Performance metrics and alerting
-
-### **Deployment Features**
-- **Auto-scaling**: 0-100 instances based on demand
-- **Health Checks**: Kubernetes-style liveness and readiness probes
-- **SSL/TLS**: Automatic certificate management
 
 ---
 
@@ -231,28 +221,6 @@ python src/main.py
 # Evaluate model performance (see result in src/results)
 python src/test_model.py
 ```
-
-## ⚙️ Environment Variables
-
-All variables are read from the environment (or an `.env` file loaded via `python-dotenv`).
-
-| Variable | Default | Description |
-|---|---|---|
-| `MODEL_API_KEY` | *(none)* | Secret key required in `X-API-Key` header. If unset, auth is disabled. |
-| `ENVIRONMENT` | `production` | Set to `development` to enable `/docs`, `/redoc`, and relaxed CORS. |
-| `DEBUG` | `false` | Set to `true` to enable auto-reload and OpenAPI docs. |
-| `REDIS_URL` | *(none)* | Redis connection URL (e.g. `redis://localhost:6379`). Falls back to in-memory if unset. |
-| `CORS_ORIGINS` | *(none)* | Comma-separated list of allowed CORS origins. |
-| `TRUSTED_HOSTS` | *(none)* | Comma-separated list of trusted host headers. |
-| `RATE_LIMIT_PER_MINUTE` | `20` | Maximum requests per minute per client. |
-| `RATE_LIMIT_PER_HOUR` | `200` | Maximum requests per hour per client. |
-| `RATE_LIMIT_PER_DAY` | `1000` | Maximum requests per day per client. |
-| `CONCURRENT_REQUESTS` | `10` | Maximum concurrent in-flight requests per client. |
-| `AUTH_MULTIPLIER` | `3.0` | Rate-limit multiplier applied to authenticated clients. |
-| `ANON_DAILY_LIMIT` | `100` | Hard daily cap for unauthenticated clients. |
-| `BLOCK_DURATION` | `300` | Seconds to block a client after abuse is detected. |
-| `GOOGLE_CLOUD_PROJECT` | *(none)* | GCP project ID; enables Cloud Logging when set. |
-| `PORT` | `8080` | Port the uvicorn server listens on inside the container. |
 
 ---
 
